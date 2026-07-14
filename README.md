@@ -6,7 +6,7 @@ A React SPA lets users browse and filter freshly scraped postings, track applica
 
 ## Team
 
-Built and maintained by Sean Berger and Anna Ber.
+Built and maintained by ![Sean Berger](https://github.com/seanbrg) and ![Anna Ber](https://github.com/8anna8b6).
 
 
 ## Highlights
