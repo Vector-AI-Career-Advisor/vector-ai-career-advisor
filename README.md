@@ -4,6 +4,11 @@
 
 A React SPA lets users browse and filter freshly scraped postings, track applications through a status pipeline, and chat with an AI assistant that can search the job database, recommend roles, tailor a resume to a specific posting, and generate company-specific interview prep — all backed by a FastAPI server and an Airflow-orchestrated ETL pipeline.
 
+## Team
+
+Built and maintained by Sean Berger and Anna Ber.
+
+
 ## Highlights
 
 - **Daily job ingestion** — a Selenium-driven scraper pulls ~100 fresh LinkedIn postings a day across 50+ role/tech keywords, orchestrated as a 5-stage Airflow DAG (`scrape → extract → load Postgres → load ChromaDB → cleanup`).
@@ -165,10 +170,6 @@ All configuration lives in `.env` (see `.env.example`):
 ## Deployment
 
 The FastAPI server ships as a Docker container (`Dockerfile`) and is deployed to EC2 behind Docker; `docker-compose.yml` orchestrates PostgreSQL and the Airflow scheduler/webserver that run the daily scrape DAG.
-
-## Team
-
-Built by Sean Berger and Anna Ber.
 
 ## License
 
