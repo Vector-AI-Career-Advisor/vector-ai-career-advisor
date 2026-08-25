@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Job, fetchJob } from '../api/jobs'
-import { uploadResume, getMyResume } from '../api/resumes'
+import { uploadResume, getMyResume, generateCoverLetter } from '../api/resumes'
 import './AgentChat.css'
 
 // ─── Simple markdown renderer (no external dependency) ───────────────────────
@@ -180,6 +180,9 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   const [error, setError]               = useState<string | null>(null)
   const [resumeFilename, setResumeFilename] = useState<string | null>(null)
   const [uploadState, setUploadState]   = useState<'idle' | 'uploading' | 'error'>('idle')
+  const [coverLetter, setCoverLetter] = useState<{ text: string; title: string; company: string } | null>(null)
+  const [coverLetterState, setCoverLetterState] = useState<'idle' | 'generating' | 'error'>('idle')
+  const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
 
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
@@ -266,6 +269,43 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
       setUploadState('error')
       setTimeout(() => setUploadState('idle'), 3000)
     }
+  }
+
+  const handleGenerateCoverLetter = async () => {
+    if (!selectedJob || coverLetterState === 'generating') return
+    setCoverLetterState('generating')
+    setCoverLetterError(null)
+    try {
+      const result = await generateCoverLetter(selectedJob.id)
+      setCoverLetter({ text: result.cover_letter, title: result.job_title, company: result.company })
+      if (result.skill_gaps && result.skill_gaps !== 'No clear skill gaps') {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: 'system',
+            text: `Skill gaps for ${result.job_title}:\n${result.skill_gaps}`,
+            timestamp: new Date(),
+          },
+        ])
+      }
+      setCoverLetterState('idle')
+    } catch (error: any) {
+      setCoverLetterState('error')
+      setCoverLetterError(error.response?.data?.detail ?? 'Could not generate a cover letter. Upload a resume and try again.')
+      setTimeout(() => setCoverLetterState('idle'), 3000)
+    }
+  }
+
+  const downloadCoverLetter = () => {
+    if (!coverLetter) return
+    const blob = new Blob([coverLetter.text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `cover-letter-${(coverLetter.company || 'job').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   const isEmpty = messages.length === 0
@@ -426,8 +466,38 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
         <div ref={bottomRef} />
       </div>
 
+      {coverLetter && (
+        <div className="cover-letter-editor" role="dialog" aria-label="Cover letter editor">
+          <div className="cover-letter-editor-header">
+            <div>
+              <p className="cover-letter-editor-title">Cover letter</p>
+              <p className="cover-letter-editor-meta">{coverLetter.title}{coverLetter.company ? ` · ${coverLetter.company}` : ''}</p>
+            </div>
+            <button className="cover-letter-close" onClick={() => setCoverLetter(null)} aria-label="Close editor">×</button>
+          </div>
+          <textarea
+            className="cover-letter-textarea"
+            value={coverLetter.text}
+            onChange={e => setCoverLetter({ ...coverLetter, text: e.target.value })}
+            aria-label="Cover letter text"
+          />
+          <button className="cover-letter-download" onClick={downloadCoverLetter}>Download edited letter</button>
+        </div>
+      )}
+      {coverLetterState === 'error' && <div className="agent-error cover-letter-error">{coverLetterError}</div>}
+
       {/* Input bar */}
       <div className="agent-input-bar">
+        {selectedJob && (
+          <button
+            className="agent-cover-letter-btn"
+            onClick={handleGenerateCoverLetter}
+            disabled={coverLetterState === 'generating'}
+            title="Generate a cover letter for the selected job"
+          >
+            {coverLetterState === 'generating' ? 'Drafting…' : 'Draft cover letter'}
+          </button>
+        )}
         {/* Resume upload button */}
         <button
           className={`agent-icon-btn agent-resume-btn ${resumeFilename ? 'has-resume' : ''}`}
@@ -476,6 +546,7 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
           </svg>
         </button>
       </div>
+
     </div>
   )
 }

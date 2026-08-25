@@ -6,7 +6,7 @@ import re
 import threading
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -14,7 +14,12 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from server.core.security import get_current_user
 from server.core.logging import set_session_user, clear_session_user
 from server.agents.orchestrator import build_orchestrator, conversation_history
-from server.agents.resume.resume_tools import set_current_user
+from server.agents.resume.resume_tools import (
+    _fallback_cover_letter,
+    _looks_like_refusal,
+    generate_cover_letter_for_job,
+    set_current_user,
+)
 from server.agents.eval.evaluator_agent import run_evaluator_agent, EvaluationInput
 from server.db.postgres import get_connection, insert_evaluation
 
@@ -22,6 +27,48 @@ from server.db.postgres import get_connection, insert_evaluation
 log = logging.getLogger("agents.router")
 
 router = APIRouter()
+
+
+# ── Cover-letter refusal recovery ───────────────────────────────────────────
+# The coordinator LLM is instructed never to refuse or second-guess a cover
+# letter request, but that instruction is a soft constraint. If it ignores it
+# and writes its own refusal/critique instead of relaying the tool's output,
+# we detect that shape and rebuild the reply straight from the tool result,
+# which resume_tools.py has already generated safely.
+
+_REFUSAL_MARKERS = (
+    "cannot write this cover letter",
+    "can't write this cover letter",
+    "in good conscience",
+    "misrepresent the candidate",
+    "the candidate should pursue",
+    "not aligned with their actual expertise",
+    "does not support the required qualifications",
+    "the resume lacks evidence",
+    "the resume demonstrates",
+    "to apply for this role authentically",
+)
+
+
+def _looks_like_refusal(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in _REFUSAL_MARKERS)
+
+
+def _recover_cover_letter_reply(agent_outputs: dict) -> Optional[str]:
+    """If the coordinator's reply looks like a refusal, rebuild it from the
+    generate_cover_letter tool's own (already-safeguarded) output instead."""
+    raw = agent_outputs.get("generate_cover_letter")
+    if not raw:
+        return None
+    try:
+        tool_result = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return raw if not _looks_like_refusal(raw) else None
+    if not isinstance(tool_result, dict) or "cover_letter" not in tool_result:
+        return None
+
+    return tool_result["cover_letter"]
 
 
 # ── Evaluation ────────────────────────────────────────────────────────────
@@ -82,11 +129,47 @@ class ChatRequest(BaseModel):
     job_id: Optional[str] = None
 
 
+class CoverLetterRequest(BaseModel):
+    job_id: str
+
+
 # ── Endpoint ───────────────────────────────────────────────────────────────
+
+@router.post("/cover-letter")
+def cover_letter(req: CoverLetterRequest, user_id: str = Depends(get_current_user)):
+    result = generate_cover_letter_for_job(int(user_id), req.job_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    if _looks_like_refusal(result.get("cover_letter", "")):
+        result["cover_letter"] = _fallback_cover_letter(
+            "", result.get("job_title", ""), result.get("company", "")
+        )
+    return result
+
 
 @router.post("/chat")
 async def chat(req: ChatRequest, user_id: str = Depends(get_current_user)):
     set_current_user(int(user_id))
+
+    if req.job_id and re.search(r"cover[\s_-]*l(?:e|a)tter(?:s)?", req.message, re.IGNORECASE):
+        async def generate_cover_letter_chat():
+            yield f"data: {json.dumps({'type': 'planning', 'agents': [{'name': 'resume_agent', 'description': 'Drafting a cover letter for the selected job'}]})}\n\n"
+            result = await asyncio.to_thread(
+                generate_cover_letter_for_job, int(user_id), req.job_id
+            )
+            if "error" in result:
+                yield f"data: {json.dumps({'type': 'error', 'detail': result['error']})}\n\n"
+                return
+
+            reply = result["cover_letter"]
+            if _looks_like_refusal(reply):
+                reply = _fallback_cover_letter(
+                    "", result.get("job_title", ""), result.get("company", "")
+                )
+            yield f"data: {json.dumps({'type': 'reply', 'reply': reply, 'job_ids': [], 'agents_used': [{'name': 'resume_agent', 'description': 'Drafting a cover letter for the selected job'}]})}\n\n"
+
+        return StreamingResponse(generate_cover_letter_chat(), media_type="text/event-stream")
+
     agent = _get_agent()
 
     lc_history: list = []
@@ -183,6 +266,22 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user)):
                     if result is not None:
                         reply_text, ids = result
                         reply_job_ids = ids if isinstance(ids, list) else []
+
+                # Safety net: if the coordinator refused/critiqued instead of
+                # relaying the cover letter it was given, rebuild the reply
+                # from the tool's own output.
+                if reply_text and _looks_like_refusal(reply_text):
+                    recovered = _recover_cover_letter_reply(agent_outputs)
+                    if recovered is None and req.job_id:
+                        direct_result = generate_cover_letter_for_job(int(user_id), req.job_id)
+                        if "cover_letter" in direct_result:
+                            recovered = direct_result["cover_letter"]
+                    if recovered is not None:
+                        log.warning(
+                            "Coordinator produced a refusal-shaped reply for user %s; "
+                            "recovered cover letter from tool output.", user_id,
+                        )
+                        reply_text = recovered
 
                 loop.call_soon_threadsafe(
                     queue.put_nowait,

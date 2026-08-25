@@ -27,3 +27,15 @@ export const getMyResume = async (): Promise<ResumeInfo | null> => {
 export const deleteResume = async (): Promise<void> => {
   await api.delete('/resumes/me')
 }
+
+export interface CoverLetter {
+  cover_letter: string
+  job_title: string
+  company: string
+  skill_gaps?: string
+}
+
+export const generateCoverLetter = async (jobId: string): Promise<CoverLetter> => {
+  const { data } = await api.post<CoverLetter>('/agents/cover-letter', { job_id: jobId })
+  return data
+}
