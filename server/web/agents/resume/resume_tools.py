@@ -74,11 +74,14 @@ def _summarize_resume_profile(
 
 
 def _fallback_cover_letter(
-    client: anthropic.Anthropic, resume_text: str, job_title: str, job_company: str,
+    client: anthropic.Anthropic | None, resume_text: str, job_title: str, job_company: str,
     skills_must: str = "", skills_nice: str = "",
 ) -> str:
-    """Clean fallback letter that guarantees a real application for every job."""
-    profile = _summarize_resume_profile(client, resume_text)
+    """Clean fallback letter that guarantees a real application for every job.
+    client/resume_text are optional — callers that only have the job's title
+    and company (e.g. a second-layer safety net with no resume text on hand)
+    can omit them and get the generic profile paragraph below instead."""
+    profile = _summarize_resume_profile(client, resume_text) if client and resume_text else ""
     if not profile:
         profile = (
             "My academic and project background has given me strong analytical "

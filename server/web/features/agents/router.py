@@ -11,16 +11,17 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-from server.core.security import get_current_user
-from server.core.logging import set_session_user, clear_session_user
-from server.agents.orchestrator import build_orchestrator, conversation_history
-from server.agents.resume.resume_tools import (
+from server.web.core.security import get_current_user
+from server.web.core.logging import set_session_user, clear_session_user
+from server.web.agents.orchestrator import build_orchestrator, conversation_history
+from server.web.agents.resume.resume_tools import (
     _fallback_cover_letter,
     _looks_like_refusal,
     generate_cover_letter_for_job,
     set_current_user,
 )
-from server.agents.eval.evaluator_agent import run_evaluator_agent, EvaluationInput
+from server.web.agents.tools.mcp_client import set_current_user as set_mcp_user, reset_current_user as reset_mcp_user
+from server.web.agents.eval.evaluator_agent import run_evaluator_agent, EvaluationInput
 from server.db.postgres import get_connection, insert_evaluation
 
 # Use the "agents" namespace so this module's logs flow into the session log file.
@@ -142,7 +143,7 @@ def cover_letter(req: CoverLetterRequest, user_id: str = Depends(get_current_use
         raise HTTPException(status_code=400, detail=result["error"])
     if _looks_like_refusal(result.get("cover_letter", "")):
         result["cover_letter"] = _fallback_cover_letter(
-            "", result.get("job_title", ""), result.get("company", "")
+            None, "", result.get("job_title", ""), result.get("company", "")
         )
     return result
 
@@ -164,7 +165,7 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user)):
             reply = result["cover_letter"]
             if _looks_like_refusal(reply):
                 reply = _fallback_cover_letter(
-                    "", result.get("job_title", ""), result.get("company", "")
+                    None, "", result.get("job_title", ""), result.get("company", "")
                 )
             yield f"data: {json.dumps({'type': 'reply', 'reply': reply, 'job_ids': [], 'agents_used': [{'name': 'resume_agent', 'description': 'Drafting a cover letter for the selected job'}]})}\n\n"
 
