@@ -22,7 +22,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 echo "Starting server..."
-cd "$ROOT/server"
+cd "$ROOT/server/web"
 "$VENV_BIN/uvicorn" main:app --reload --port 8000 &
 BACKEND_PID=$!
 
