@@ -69,6 +69,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.airflow
+      args:
+        CHROME_VERSION: ${CHROME_VERSION}
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
@@ -87,6 +89,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.airflow
+      args:
+        CHROME_VERSION: ${CHROME_VERSION}
     restart: always
     environment:
       DOCKER_DB_HOST: postgres
@@ -111,6 +115,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.airflow
+      args:
+        CHROME_VERSION: ${CHROME_VERSION}
     restart: always
     environment:
       DOCKER_DB_HOST: postgres

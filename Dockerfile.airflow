@@ -3,7 +3,7 @@ FROM apache/airflow:2.8.0-python3.11
 USER root
 
 RUN apt-get update && apt-get install -y \
-    wget gnupg unzip curl \
+    wget gnupg unzip curl jq \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 \
     libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 \
@@ -13,11 +13,19 @@ RUN apt-get update && apt-get install -y \
     xdg-utils --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && apt-get update \
-    && apt-get install -y /tmp/chrome.deb \
-    && rm /tmp/chrome.deb \
-    && rm -rf /var/lib/apt/lists/*
+# Pin Chrome to the milestone in CHROME_VERSION (must match the version_main
+# passed to undetected_chromedriver in server/etl/scraper/scraper.py) via
+# Chrome for Testing, instead of always installing whatever build is
+# currently "stable" — that drift is what breaks the scraper task on rebuild.
+ARG CHROME_VERSION=148
+RUN CHROME_URL=$(curl -sf "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json" \
+        | jq -r ".milestones[\"${CHROME_VERSION}\"].downloads.chrome[] | select(.platform == \"linux64\") | .url") \
+    && test -n "$CHROME_URL" \
+    && wget -q -O /tmp/chrome-linux64.zip "$CHROME_URL" \
+    && unzip -q /tmp/chrome-linux64.zip -d /opt/ \
+    && rm /tmp/chrome-linux64.zip \
+    && chmod +x /opt/chrome-linux64/chrome \
+    && ln -sf /opt/chrome-linux64/chrome /usr/local/bin/google-chrome
 
 USER airflow
 
