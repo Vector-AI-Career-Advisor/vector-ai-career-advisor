@@ -40,8 +40,9 @@ services:
   # agent runtime uses to query Postgres (see scripts/sql/create_agent_role.sql
   # and server/mcp/). Deliberately NOT given `env_file: .env` — only the
   # two secrets it actually needs are passed explicitly below, so it can never
-  # see DB_PASSWORD (the superuser DSN) or ANTHROPIC_API_KEY. `expose`, not
-  # `ports`, so it's reachable from other containers but never from the host.
+  # see DB_PASSWORD (the superuser DSN) or ANTHROPIC_API_KEY. Published to the
+  # host on 8100 so external MCP clients (e.g. Claude) can connect directly;
+  # AGENT_TOKEN_SECRET auth still gates access.
   mcp-db:
     build:
       context: .
@@ -58,8 +59,8 @@ services:
       AGENT_DB_DSN: postgresql://vector_agent:${AGENT_DB_PASSWORD}@postgres:5432/${DB_NAME}
       AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET}
       MCP_PORT: 8100
-    expose:
-      - "8100"
+    ports:
+      - "8100:8100"
     depends_on:
       postgres:
         condition: service_healthy

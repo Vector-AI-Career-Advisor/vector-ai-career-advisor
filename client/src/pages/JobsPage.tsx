@@ -94,7 +94,7 @@ export default function JobsPage() {
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
-  const [chatOpen, setChatOpen]   = useState(false)
+  const [chatOpen, setChatOpen]   = useState(true)
   const [chatWidth, setChatWidth] = useState(700)
 
   const handleDragStart = (e: React.MouseEvent) => {
