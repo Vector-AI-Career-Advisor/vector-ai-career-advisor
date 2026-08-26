@@ -1,4 +1,4 @@
-from features.jobs import repository, service
+from server.web.features.jobs import repository, service
 
 
 def test_list_jobs_returns_dict():

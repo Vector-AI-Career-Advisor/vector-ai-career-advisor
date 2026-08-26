@@ -80,29 +80,37 @@ client/                  React + TypeScript SPA (Vite)
   src/api/                Axios clients per domain (auth, jobs, resumes, applications, stats)
 
 server/
-  main.py                 FastAPI app entrypoint
-  features/                One router per domain: auth, jobs, resumes, applications, agents, stats
-  agents/
-    orchestrator/          Intent classification + tool-calling router (LangGraph)
-    data/                  DB Agent — structured & semantic job queries
-    resume/                Resume Agent — upload, tailor, gap analysis
-    advisor/                Job Advisor Agent — career coaching, course recs
-    interview/              Interview Agent — company-specific question search & generation
-    eval/                   Evaluator Agent — LLM-as-judge scoring of orchestrator responses
-  db/
+  web/                    The FastAPI app — its own container (Dockerfile.server, service `server`)
+    main.py                 App entrypoint (ASGI module, run via `uvicorn main:app`)
+    core/                   Config, JWT auth/security, exception handlers, logging
+    features/               One router per domain: auth, jobs, resumes, applications, agents, stats
+    agents/
+      orchestrator/          Intent classification + tool-calling router (LangGraph)
+      data/                  DB Agent — structured & semantic job queries, plus MCP-backed tools
+      resume/                Resume Agent — upload, tailor, gap analysis
+      advisor/                Job Advisor Agent — career coaching, course recs
+      interview/              Interview Agent — company-specific question search & generation
+      eval/                   Evaluator Agent — LLM-as-judge scoring of orchestrator responses
+      tools/mcp_client.py     Bridges the agent runtime's sync tools to the async MCP client
+  db/                     Shared by web and etl — not containerized separately
     postgres.py             Schema + all SQL (users, jobs, resumes, applications, agent_evaluations)
     chroma.py                Multi-vector embedding, upsert, and semantic search
-    embeddings.py             Embedding generation
-  pipeline/
+    embeddings.py             Embedding generation (local model, via ChromaDB)
+  mcp/                    MCP server — agents' read-only DB access, over its own vector_agent
+                            Postgres role, in its own container (service `mcp-db`)
+  etl/                    Scrape → extract → insert → embed pipeline — its own container image
+                            (Dockerfile.airflow, services airflow-init/scheduler/webserver)
+    dags/scraper_dag.py     Airflow DAG definition (daily schedule)
     scraper/                 Selenium scraper (LinkedIn)
     extractor.py              Claude-based structured field extraction
     core.py                    scrape → extract → load orchestration used by the DAG
-  tests/                    Pytest suite (agents, jobs, resumes)
+  logs/                   Airflow logs + per-user chat session logs (web/core/logging.py)
+  tests/                  Pytest suite (agents, features, mcp)
 
-dags/scraper_dag.py       Airflow DAG definition (daily schedule)
-scripts/                  Local dev helpers (run.sh, runner.py, setup_models.sh)
-docker-compose.yml        Postgres + Airflow (scheduler/webserver) services
-Dockerfile                Airflow image with headless Chrome baked in for scraping
+scripts/                  Local dev helpers (run.sh, run-project.bat, setup.sh, runner.py, setup_models.sh)
+docker-compose.yml        Postgres + FastAPI server + MCP server + Airflow (scheduler/webserver) services
+Dockerfile.server         FastAPI server image
+Dockerfile.airflow        Airflow image with headless Chrome baked in for scraping
 ```
 
 ## Getting started
@@ -166,10 +174,13 @@ All configuration lives in `.env` (see `.env.example`):
 | `CHROMA_DIR` / `CHROMA_COLLECTION` | ChromaDB persistence path and collection name |
 | `CHROME_VERSION` | Chrome version pin for the scraper's headless driver |
 | `DAILY_TARGET` | Max number of jobs the scraper ingests per run |
+| `AGENT_DB_PASSWORD` | Password for the read-only `vector_agent` Postgres role the MCP server connects as — see `scripts/sql/create_agent_role.sql` |
+| `AGENT_TOKEN_SECRET` | Shared secret signing the short-lived per-request identity token the server attaches when calling the MCP server |
+| `MCP_URL` | Where the server reaches the MCP server when run outside Docker (docker-compose sets the in-network address itself) |
 
 ## Deployment
 
-The FastAPI server ships as a Docker container (`Dockerfile`) and is deployed to EC2 behind Docker; `docker-compose.yml` orchestrates PostgreSQL and the Airflow scheduler/webserver that run the daily scrape DAG.
+The FastAPI server ships as its own Docker container (`Dockerfile.server`) and is deployed to EC2 behind Docker; `docker-compose.yml` orchestrates PostgreSQL, the server, the MCP server (agents' read-only DB access, over its own `vector_agent` role — see `server/mcp/`), and the Airflow scheduler/webserver (`Dockerfile.airflow`) that run the daily scrape DAG.
 
 ## License
 

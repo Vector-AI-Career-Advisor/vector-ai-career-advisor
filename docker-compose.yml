@@ -15,12 +15,63 @@ services:
       interval: 5s
       retries: 5
 
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    restart: always
+    environment:
+      DOCKER_DB_HOST: postgres
+      DB_PORT: 5432
+      DOCKER_MCP_URL: http://mcp-db:8100/mcp
+    env_file:
+      - .env
+    volumes:
+      - ./server/db/chroma_db:/app/server/db/chroma_db
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mcp-db:
+        condition: service_started
+
+  # Separate container, separate credential: this is the read-only path the
+  # agent runtime uses to query Postgres (see scripts/sql/create_agent_role.sql
+  # and server/mcp/). Deliberately NOT given `env_file: .env` — only the
+  # two secrets it actually needs are passed explicitly below, so it can never
+  # see DB_PASSWORD (the superuser DSN) or ANTHROPIC_API_KEY. `expose`, not
+  # `ports`, so it's reachable from other containers but never from the host.
+  mcp-db:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    # Dockerfile.server's own WORKDIR is /app/server/web (so the `server`
+    # service's `uvicorn main:app` resolves "main" as a top-level module
+    # there). This service instead runs `python -m server.mcp.server`, whose
+    # internal imports (e.g. `from server.mcp.auth import ...`) need `server`
+    # to resolve as a top-level package — i.e. cwd two levels up, at /app.
+    working_dir: /app
+    command: ["python", "-m", "server.mcp.server"]
+    restart: always
+    environment:
+      AGENT_DB_DSN: postgresql://vector_agent:${AGENT_DB_PASSWORD}@postgres:5432/${DB_NAME}
+      AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET}
+      MCP_PORT: 8100
+    expose:
+      - "8100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   airflow-init:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/career_assistant/dags
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/career_assistant/server/etl/dags
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres/airflow
     volumes:
       - .:/opt/career_assistant
@@ -32,14 +83,16 @@ services:
       airflow users create --username airflow --password airflow --firstname Air --lastname Flow --role Admin --email airflow@example.com || true"
   
   scheduler:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     restart: always
     environment:
       DOCKER_DB_HOST: postgres
       DB_PORT: 5432
       PYTHONPATH: /opt/career_assistant:/opt/career_assistant/server
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/career_assistant/dags
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/career_assistant/server/etl/dags
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres/airflow
     env_file:
       - .env
@@ -54,7 +107,9 @@ services:
     command: airflow scheduler
 
   webserver:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     restart: always
     environment:
       DOCKER_DB_HOST: postgres
@@ -62,7 +117,7 @@ services:
       PYTHONPATH: /opt/career_assistant:/opt/career_assistant/server
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/career_assistant/dags
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/career_assistant/server/etl/dags
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres/airflow
     env_file:
       - .env

@@ -1,4 +1,4 @@
-from features.resumes import repository, service
+from server.web.features.resumes import repository, service
 
 
 def test_save_and_get_resume():

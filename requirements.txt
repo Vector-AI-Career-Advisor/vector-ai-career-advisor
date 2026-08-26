@@ -59,6 +59,7 @@ langgraph-prebuilt==1.0.8
 langsmith==0.7.22
 markdown-it-py==4.0.0
 MarkupSafe==3.0.3
+mcp==1.9.4
 mdurl==0.1.2
 mmh3==5.2.1
 mpmath==1.3.0

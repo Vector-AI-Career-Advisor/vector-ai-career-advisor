@@ -3,9 +3,9 @@ import logging
 from typing import Dict, List, Optional
 import chromadb
 from chromadb.config import Settings
-from server.core.config import CHROMA_PERSIST_DIR, CHROMA_COLLECTION
+from server.web.core.config import CHROMA_PERSIST_DIR, CHROMA_COLLECTION
 from .embeddings import get_embeddings
-from server.pipeline.utils import build_chroma_metadata
+from server.etl.utils import build_chroma_metadata
 
 log = logging.getLogger(__name__)
 

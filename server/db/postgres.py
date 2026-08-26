@@ -5,7 +5,7 @@ from datetime import date
 from typing import List, Optional
 import psycopg2
 from psycopg2.extras import execute_values
-from server.core.config import DB_CONFIG
+from server.web.core.config import DB_CONFIG
 
 log = logging.getLogger(__name__)
 

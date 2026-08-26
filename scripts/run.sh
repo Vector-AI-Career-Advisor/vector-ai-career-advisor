@@ -3,6 +3,15 @@ set -e
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 
+# `python -m venv` puts executables in Scripts/ on Windows and bin/ everywhere
+# else, regardless of which shell created the venv — so this can't be a fixed
+# path if the same script is meant to run under Git Bash too (see run-project.bat).
+if [ -d "$ROOT/.venv/Scripts" ]; then
+  VENV_BIN="$ROOT/.venv/Scripts"
+else
+  VENV_BIN="$ROOT/.venv/bin"
+fi
+
 cleanup() {
   echo ""
   echo "Shutting down..."
@@ -14,7 +23,7 @@ trap cleanup SIGINT SIGTERM
 
 echo "Starting server..."
 cd "$ROOT/server"
-"$ROOT/.venv/bin/uvicorn" main:app --reload --port 8000 &
+"$VENV_BIN/uvicorn" main:app --reload --port 8000 &
 BACKEND_PID=$!
 
 echo "Starting client..."

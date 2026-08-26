@@ -7,8 +7,8 @@ from __future__ import annotations
 import logging
 import time
 
-from pipeline.core import run_extract, run_load_chroma, run_load_postgres, run_scrape
-from pipeline.utils import fmt
+from server.etl.core import run_extract, run_load_chroma, run_load_postgres, run_scrape
+from server.etl.utils import fmt
 
 logging.basicConfig(
     level=logging.INFO,
