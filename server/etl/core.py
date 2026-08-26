@@ -16,6 +16,7 @@ from server.db.postgres import (
     get_connection,
     init_db,
     insert_jobs,
+    refresh_job_count_stat,
 )
 from .extractor import extract_all_parallel
 from .scraper import build_driver, scrape_keyword
@@ -130,6 +131,7 @@ def run_load_postgres(jobs: List[dict]) -> int:
     conn     = get_connection()
     init_db(conn)
     inserted = insert_jobs(conn, unique_jobs)
+    refresh_job_count_stat(conn)
     conn.close()
     return inserted
 

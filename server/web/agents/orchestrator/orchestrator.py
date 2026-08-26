@@ -20,6 +20,7 @@ from server.web.agents.data.db_agent import run_db_agent
 from server.web.agents.resume.resume_agent import run_resume_agent
 from server.web.agents.advisor.job_advisor_agent import run_job_advisor_agent
 from server.web.agents.interview.interview_agent import run_interview_agent
+from server.db.postgres import get_job_count_cached
 from .prompt import PROMPT
 
 load_dotenv()
@@ -98,7 +99,10 @@ def build_orchestrator():
     ).bind_tools(ORCHESTRATOR_TOOLS)
 
     def coordinator(state: State):
-        prompt = PROMPT.format(today=date.today().strftime("%B %d, %Y"))
+        prompt = PROMPT.format(
+            today=date.today().strftime("%B %d, %Y"),
+            job_count=get_job_count_cached(),
+        )
         messages = [SystemMessage(content=prompt)] + state["messages"]
         try:
             response = llm.invoke(messages)

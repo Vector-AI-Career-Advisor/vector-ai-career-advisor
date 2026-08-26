@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import threading
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,7 +23,9 @@ from server.web.agents.resume.resume_tools import (
 )
 from server.web.agents.tools.mcp_client import set_current_user as set_mcp_user, reset_current_user as reset_mcp_user
 from server.web.agents.eval.evaluator_agent import run_evaluator_agent, EvaluationInput
+from server.web.features.resumes.repository import get_resume
 from server.db.postgres import get_connection, insert_evaluation
+from server.db.chroma import init_chroma, search_jobs as chroma_search
 
 # Use the "agents" namespace so this module's logs flow into the session log file.
 log = logging.getLogger("agents.router")
@@ -116,6 +119,76 @@ def _get_agent():
     if _orchestrator is None:
         _orchestrator = build_orchestrator()
     return _orchestrator
+
+
+# ── Login recommendation (deterministic, no LLM) ────────────────────────────
+# Fired once per fresh login by the frontend. Resume-check and "today's jobs"
+# date filtering are correctness-critical, so this is handled directly in
+# Python rather than relying on the orchestrator LLM's free-form classification.
+
+_login_chroma_collection = None
+_login_chroma_lock = threading.Lock()
+
+def _login_collection():
+    global _login_chroma_collection
+    if _login_chroma_collection is None:
+        with _login_chroma_lock:
+            if _login_chroma_collection is None:
+                _login_chroma_collection = init_chroma()
+    return _login_chroma_collection
+
+
+class LoginRecommendationResponse(BaseModel):
+    reply: str
+    job_ids: List[str]
+
+
+@router.post("/login-recommendation", response_model=LoginRecommendationResponse)
+def login_recommendation(user_id: str = Depends(get_current_user)):
+    resume = get_resume(int(user_id))
+    if not resume:
+        return LoginRecommendationResponse(
+            reply="Welcome back! I don't have a resume on file for you yet — upload your "
+                  "resume and I'll recommend jobs that match your profile.",
+            job_ids=[],
+        )
+
+    today = date.today().isoformat()
+    job_ids: List[str] = []
+    try:
+        collection = _login_collection()
+        hits = chroma_search(
+            collection,
+            (resume["content"] or "")[:4000],
+            n_results=15,
+            where={"$and": [{"posted_at": today}, {"type": "full"}]},
+        )
+        seen: set = set()
+        for h in hits:
+            jid = h.get("metadata", {}).get("job_id")
+            if jid and jid not in seen:
+                seen.add(jid)
+                job_ids.append(jid)
+            if len(job_ids) == 3:
+                break
+    except Exception:
+        log.exception("Login recommendation job search failed for user %s", user_id)
+        job_ids = []
+
+    if not job_ids:
+        return LoginRecommendationResponse(
+            reply="Welcome back! I didn't find any new jobs posted today that match your "
+                  "resume — check back later or browse the full listings.",
+            job_ids=[],
+        )
+
+    count_word = "is" if len(job_ids) == 1 else "are"
+    plural = "" if len(job_ids) == 1 else "s"
+    return LoginRecommendationResponse(
+        reply=f"Welcome back! Here {count_word} {len(job_ids)} job{plural} posted today "
+              f"that match your resume:",
+        job_ids=job_ids,
+    )
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────

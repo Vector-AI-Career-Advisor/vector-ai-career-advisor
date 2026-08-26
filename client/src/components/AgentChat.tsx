@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Job, fetchJob } from '../api/jobs'
 import { uploadResume, getMyResume, generateCoverLetter } from '../api/resumes'
+import { getLoginRecommendation } from '../api/agents'
 import './AgentChat.css'
 
 // ─── Simple markdown renderer (no external dependency) ───────────────────────
@@ -176,6 +177,7 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   const [messages, setMessages]         = useState<Message[]>([])
   const [input, setInput]               = useState('')
   const [isTyping, setIsTyping]         = useState(false)
+  const [hasUserInteracted, setHasUserInteracted] = useState(false)
   const [pendingAgents, setPendingAgents] = useState<AgentStep[]>([])
   const [error, setError]               = useState<string | null>(null)
   const [resumeFilename, setResumeFilename] = useState<string | null>(null)
@@ -195,6 +197,23 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
       .catch(() => {})
   }, [])
 
+  // Fire a one-shot job recommendation right after a fresh login
+  useEffect(() => {
+    if (!sessionStorage.getItem('vector_just_logged_in')) return
+    sessionStorage.removeItem('vector_just_logged_in')
+
+    setIsTyping(true)
+    getLoginRecommendation()
+      .then(({ reply, job_ids }) => {
+        setMessages(prev => [
+          ...prev,
+          { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), jobIds: job_ids },
+        ])
+      })
+      .catch(() => {})
+      .finally(() => setIsTyping(false))
+  }, [])
+
   // Scroll to latest message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -204,6 +223,8 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   const send = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isTyping) return
+
+    setHasUserInteracted(true)
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
@@ -308,7 +329,8 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
     URL.revokeObjectURL(url)
   }
 
-  const isEmpty = messages.length === 0
+  const showBackdrop = !hasUserInteracted
+  const showMessages = messages.length > 0 || isTyping
   const lastAgentId = [...messages].reverse().find(m => m.role === 'agent')?.id
 
   return (
@@ -348,7 +370,7 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
 
       {/* Message area */}
       <div className="agent-messages">
-        {isEmpty ? (
+        {showBackdrop && (
           <div className="agent-empty">
             <div className="agent-empty-icon">
               <svg width="52" height="52" viewBox="0 0 24 24" fill="none"
@@ -375,7 +397,8 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
               ))}
             </div>
           </div>
-        ) : (
+        )}
+        {showMessages && (
           <>
             {messages.map(msg => (
               <div key={msg.id} className={`message-row ${msg.role}`}>

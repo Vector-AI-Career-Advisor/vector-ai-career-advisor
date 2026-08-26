@@ -15,6 +15,7 @@ from langgraph.prebuilt import ToolNode
 
 from server.web.agents.data.db_tools import DB_TOOLS
 from server.web.agents.data.prompt import PROMPT
+from server.db.postgres import get_job_count_cached
 
 load_dotenv()
 
@@ -36,7 +37,10 @@ def build_db_agent():
     def assistant(state: State):
         has_results = any(isinstance(m, ToolMessage) for m in state["messages"])
         llm = llm_auto if has_results else llm_force
-        prompt = PROMPT.format(today=date.today().strftime("%B %d, %Y"))
+        prompt = PROMPT.format(
+            today=date.today().strftime("%B %d, %Y"),
+            job_count=get_job_count_cached(),
+        )
         messages = [SystemMessage(content=prompt)] + state["messages"]
         return {"messages": [llm.invoke(messages)]}
 

@@ -13,6 +13,7 @@ export function useAuth() {
     try {
       const token = await apiLogin(email, password)
       localStorage.setItem('token', token)
+      sessionStorage.setItem('vector_just_logged_in', '1')
       navigate('/jobs')
     } catch (e: any) {
       setError(e.response?.data?.detail ?? 'Login failed')
@@ -29,6 +30,7 @@ export function useAuth() {
       // Auto-login after signup
       const token = await apiLogin(email, password)
       localStorage.setItem('token', token)
+      sessionStorage.setItem('vector_just_logged_in', '1')
       navigate('/jobs')
     } catch (e: any) {
       setError(e.response?.data?.detail ?? 'Signup failed')

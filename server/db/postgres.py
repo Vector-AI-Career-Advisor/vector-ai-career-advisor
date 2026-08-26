@@ -119,6 +119,19 @@ def init_db(conn=None) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS applications_user_idx   ON applications (user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS applications_status_idx ON applications (status);")
 
+            # ── Pipeline stats ───────────────────────────────────────────────
+            # Single-row table the ETL pipeline is the sole writer of — lets the
+            # web app read a cheap, server-wide job count without ever
+            # querying `jobs` itself (see refresh_job_count_stat / get_job_count_stat).
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS pipeline_stats (
+                    id         SMALLINT PRIMARY KEY DEFAULT 1,
+                    job_count  INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    CHECK (id = 1)
+                );
+            """)
+
         conn.commit()
     finally:
         if _own_conn:
@@ -332,6 +345,58 @@ def count_jobs(conn) -> int:
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM jobs")
         return cur.fetchone()[0]
+
+
+def refresh_job_count_stat(conn) -> int:
+    """Recompute and persist the total job count into `pipeline_stats`.
+    Called only by the ETL pipeline after loading — the web app must never
+    call this; it only reads the value via get_job_count_stat."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO pipeline_stats (id, job_count, updated_at)
+            VALUES (1, (SELECT COUNT(*) FROM jobs), NOW())
+            ON CONFLICT (id) DO UPDATE
+                SET job_count  = EXCLUDED.job_count,
+                    updated_at = EXCLUDED.updated_at
+            RETURNING job_count;
+        """)
+        count = cur.fetchone()[0]
+    conn.commit()
+    log.info("pipeline_stats.job_count refreshed to %d.", count)
+    return count
+
+
+def get_job_count_stat(conn) -> Optional[int]:
+    """Read the ETL-maintained job count. None if the ETL has never run."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT job_count FROM pipeline_stats WHERE id = 1")
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
+# Process-lifetime cache, shared by every agent prompt that needs the count
+# (orchestrator, db_agent, ...) so it's read from Postgres at most once per
+# server process rather than once per agent. The ETL is the only writer of
+# the underlying value (refresh_job_count_stat); the web app just reflects
+# whatever it last saw — a fresh number only ever appears after a restart.
+_job_count_cache: Optional[int] = None
+_job_count_loaded = False
+
+
+def get_job_count_cached() -> str:
+    """Cached, prompt-ready text form of the ETL-maintained job count."""
+    global _job_count_cache, _job_count_loaded
+    if not _job_count_loaded:
+        try:
+            conn = get_connection()
+            try:
+                _job_count_cache = get_job_count_stat(conn)
+            finally:
+                conn.close()
+        except Exception:
+            log.warning("Could not load pipeline_stats.job_count.", exc_info=True)
+        _job_count_loaded = True
+    return str(_job_count_cache) if _job_count_cache is not None else "unknown"
 
 
 def count_jobs_today(conn) -> int:

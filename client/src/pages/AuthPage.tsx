@@ -79,6 +79,7 @@ export function OAuthCallback() {
       provider,
     }).then(({ data }) => {
       localStorage.setItem('token', data.access_token)
+      sessionStorage.setItem('vector_just_logged_in', '1')
       navigate('/jobs')
     }).catch((e) => {
       setError(e.response?.data?.detail ?? 'OAuth login failed')
