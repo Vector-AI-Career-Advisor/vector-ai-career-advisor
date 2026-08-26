@@ -50,7 +50,7 @@ def db_agent(query: str) -> str:
 @tool
 def resume_agent(query: str) -> str:
     """Delegate to the Resume Agent for resume-related tasks.
-    Use for: tailoring a resume to a job, uploading a resume, gap analysis.
+    Use for: tailoring a resume, generating a cover letter, uploading a resume, gap analysis.
     Pass the user's full request (including any job IDs) as `query`.
     """
     log.info("[AGENT] dispatching → resume_agent | query=%r", query)
