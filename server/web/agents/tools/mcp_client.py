@@ -19,9 +19,9 @@ from typing import Any, Optional
 
 from langchain.tools import tool
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
-from server.mcp.auth import mint_agent_token
+from server.mcp_server.auth import mint_agent_token
 
 log = logging.getLogger("agents.mcp_client")
 
@@ -59,7 +59,7 @@ async def _call(name: str, args: dict) -> tuple[str, bool]:
         # argument — see mcp/auth.py and mcp/server.py.
         headers["x-vector-agent-token"] = mint_agent_token(int(user_id))
 
-    async with streamablehttp_client(MCP_URL, headers=headers) as (read, write, _):
+    async with streamable_http_client(MCP_URL, headers=headers) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
             result = await session.call_tool(name, args)

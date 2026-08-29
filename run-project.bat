@@ -8,13 +8,15 @@ echo ===============================
 :: Go to project root
 cd /d "%~dp0"
 
+@echo off
+
 echo.
 echo Project root:
 echo %CD%
 
 echo.
 echo Starting Backend...
-start "Backend - FastAPI" cmd /k "cd /d "%~dp0server" && "%~dp0.venv\Scripts\python.exe" -m uvicorn main:app --reload --port 8000"
+start "Backend - FastAPI" cmd /k "cd /d "%~dp0server" && "%~dp0.venv\Scripts\python.exe" -m uvicorn web.main:app --reload --port 8000"
 
 echo Starting Frontend...
 start "Frontend - Vite" cmd /k "cd /d "%~dp0client" && npm run dev"

@@ -30,7 +30,7 @@ from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 from mcp.server.fastmcp import Context, FastMCP
 
-from server.mcp.auth import verify_agent_token
+from server.mcp_server.auth import verify_agent_token
 
 log = logging.getLogger("mcp")
 

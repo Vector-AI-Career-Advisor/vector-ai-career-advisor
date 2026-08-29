@@ -66,21 +66,21 @@ def test_agent_evaluations_table_unreadable(agent_conn):
 # hence living in this skipped-without-a-DB file rather than test_auth.py.
 
 def test_run_select_rejects_stacked_statements():
-    from server.mcp.server import run_select
+    from server.mcp_server.server import run_select
 
     result = run_select(sql="SELECT 1; DROP TABLE jobs;")
     assert "error" in result
 
 
 def test_run_select_rejects_non_select():
-    from server.mcp.server import run_select
+    from server.mcp_server.server import run_select
 
     result = run_select(sql="DELETE FROM jobs")
     assert "error" in result
 
 
 def test_run_select_allows_plain_select(agent_conn):
-    from server.mcp.server import run_select
+    from server.mcp_server.server import run_select
 
     result = run_select(sql="SELECT 1 AS one")
     assert result["rows"] == [{"one": 1}]
