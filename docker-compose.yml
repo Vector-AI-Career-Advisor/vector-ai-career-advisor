@@ -38,7 +38,7 @@ services:
 
   # Separate container, separate credential: this is the read-only path the
   # agent runtime uses to query Postgres (see scripts/sql/create_agent_role.sql
-  # and server/mcp/). Deliberately NOT given `env_file: .env` — only the
+  # and server/mcp_server/). Deliberately NOT given `env_file: .env` — only the
   # two secrets it actually needs are passed explicitly below, so it can never
   # see DB_PASSWORD (the superuser DSN) or ANTHROPIC_API_KEY. Published to the
   # host on 8100 so external MCP clients (e.g. Claude) can connect directly;
@@ -49,11 +49,11 @@ services:
       dockerfile: Dockerfile.server
     # Dockerfile.server's own WORKDIR is /app/server/web (so the `server`
     # service's `uvicorn main:app` resolves "main" as a top-level module
-    # there). This service instead runs `python -m server.mcp.server`, whose
-    # internal imports (e.g. `from server.mcp.auth import ...`) need `server`
+    # there). This service instead runs `python -m server.mcp_server.server`, whose
+    # internal imports (e.g. `from server.mcp_server.auth import ...`) need `server`
     # to resolve as a top-level package — i.e. cwd two levels up, at /app.
     working_dir: /app
-    command: ["python", "-m", "server.mcp.server"]
+    command: ["python", "-m", "server.mcp_server.server"]
     restart: always
     environment:
       AGENT_DB_DSN: postgresql://vector_agent:${AGENT_DB_PASSWORD}@postgres:5432/${DB_NAME}
