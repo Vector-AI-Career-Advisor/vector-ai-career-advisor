@@ -19,6 +19,7 @@ from server.web.agents.resume.resume_tools import (
     _fallback_cover_letter,
     _looks_like_refusal,
     generate_cover_letter_for_job,
+    generate_tailored_resume_for_job,
     set_current_user,
 )
 from server.web.agents.tools.mcp_client import set_current_user as set_mcp_user, reset_current_user as reset_mcp_user
@@ -218,6 +219,14 @@ def cover_letter(req: CoverLetterRequest, user_id: str = Depends(get_current_use
         result["cover_letter"] = _fallback_cover_letter(
             None, "", result.get("job_title", ""), result.get("company", "")
         )
+    return result
+
+
+@router.post("/fit-resume")
+def fit_resume(req: CoverLetterRequest, user_id: str = Depends(get_current_user)):
+    result = generate_tailored_resume_for_job(int(user_id), req.job_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
     return result
 
 

@@ -274,6 +274,90 @@ def generate_cover_letter_for_job(user_id: int, job_id: str) -> dict:
     }
 
 
+def generate_tailored_resume_for_job(user_id: int, job_id: str) -> dict:
+    """Generate a polished, editable tailored resume for a given job posting."""
+    conn = _conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT content FROM resumes WHERE user_id = %s", (user_id,))
+            resume_row = cur.fetchone()
+            if not resume_row:
+                return {"error": "No resume on file. Please upload a PDF resume first."}
+            cur.execute(
+                "SELECT title, company, description, skills_must, skills_nice FROM jobs WHERE id = %s",
+                (job_id,),
+            )
+            job_row = cur.fetchone()
+            if not job_row:
+                return {"error": f"Job '{job_id}' not found in the database."}
+    finally:
+        conn.close()
+
+    resume_text = resume_row["content"] or ""
+    job_title = job_row["title"] or ""
+    job_company = job_row["company"] or ""
+    skills_must = ", ".join(job_row["skills_must"] or [])
+    skills_nice = ", ".join(job_row["skills_nice"] or [])
+
+    prompt = textwrap.dedent(f"""
+        Tailor the candidate's resume for the job below without inventing facts or changing dates,
+        employers, education, or credentials.
+
+        Goal: make the resume read as the strongest possible match for this role while remaining honest,
+        factual, and fully editable. Prioritize the most relevant experience, skills, and impact.
+        Keep the original content and structure where possible, but reorder and rewrite sections to better
+        highlight the alignment with the role.
+
+        Rules:
+        - Do not invent jobs, achievements, tools, technologies, or credentials.
+        - Do not add skills that are not already in the resume unless they are clearly adjacent and can be
+          framed as current capabilities or a strong learning interest.
+        - Keep the result plain text, readable, and suitable to paste into a resume editor.
+        - Output only the tailored resume text, with no markdown, no commentary, and no preamble.
+
+        JOB TITLE: {job_title}
+        COMPANY: {job_company}
+        REQUIRED SKILLS: {skills_must}
+        NICE-TO-HAVE: {skills_nice}
+        DESCRIPTION:
+        {job_row['description'] or ''}
+
+        ORIGINAL RESUME:
+        {resume_text}
+    """).strip()
+
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    try:
+        message = client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL"),
+            max_tokens=4096,
+            system="Rewrite the resume to best fit the target role while staying truthful and factual.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        tailored_resume = message.content[0].text.strip()
+    except anthropic.APIError as exc:
+        return {"error": f"Resume tailoring failed: {exc}. Please try again."}
+
+    if not tailored_resume:
+        return {"error": "Resume tailoring returned no content. Please try again."}
+
+    output_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+        "db", "tailored_resumes",
+    )
+    os.makedirs(output_dir, exist_ok=True)
+    safe_job = re.sub(r"[^a-zA-Z0-9_-]", "_", job_id)[:40]
+    filepath = os.path.join(output_dir, f"resume_user{user_id}_{safe_job}.pdf")
+    _save_pdf(tailored_resume, filepath)
+
+    return {
+        "tailored_resume": tailored_resume,
+        "job_title": job_title,
+        "company": job_company,
+        "file": filepath,
+    }
+
+
 # ── tools ─────────────────────────────────────────────────────────────────
 
 @tool
@@ -351,67 +435,21 @@ def get_user_resume() -> dict:
 
 @tool
 def tailor_resume_to_job(job_id: str) -> dict:
-    """Tailor the current user's resume for a specific job and save a PDF."""
+    """Tailor the current user's resume for a specific job, save a PDF, and return the editable version."""
     user_id = _context.get("user_id")
     if not user_id:
         return {"error": "No user session active. Cannot access resume."}
 
-    conn = _conn()
-    try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT content FROM resumes WHERE user_id = %s", (user_id,))
-            resume_row = cur.fetchone()
-            if not resume_row:
-                return {"error": "No resume on file. Please upload a PDF resume first."}
-            cur.execute(
-                "SELECT title, company, description, skills_must, skills_nice FROM jobs WHERE id = %s",
-                (job_id,),
-            )
-            job_row = cur.fetchone()
-            if not job_row:
-                return {"error": f"Job '{job_id}' not found in the database."}
-    finally:
-        conn.close()
-
-    job_title = job_row["title"] or ""
-    job_company = job_row["company"] or ""
-    prompt = textwrap.dedent(f"""
-        Lightly tailor the resume below for {job_title} at {job_company}.
-        Only rephrase or reorder information already present. Do not add skills,
-        tools, experience, credentials, dates, or achievements. Output only the
-        tailored resume text.
-
-        JOB DESCRIPTION:
-        {job_row['description'] or ''}
-
-        ORIGINAL RESUME:
-        {resume_row['content']}
-    """).strip()
-
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    try:
-        message = client.messages.create(
-            model=os.getenv("ANTHROPIC_MODEL"),
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except anthropic.APIError as exc:
-        return {"error": f"Resume tailoring failed: {exc}. Please try again."}
-
-    output_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-        "db", "tailored_resumes",
-    )
-    os.makedirs(output_dir, exist_ok=True)
-    safe_job = re.sub(r"[^a-zA-Z0-9_-]", "_", job_id)[:40]
-    filepath = os.path.join(output_dir, f"resume_user{user_id}_{safe_job}.pdf")
-    _save_pdf(message.content[0].text.strip(), filepath)
+    result = generate_tailored_resume_for_job(int(user_id), job_id)
+    if "error" in result:
+        return result
 
     return {
         "message": "Tailored resume saved successfully.",
-        "file": filepath,
-        "job_title": job_title,
-        "company": job_company,
+        "tailored_resume": result["tailored_resume"],
+        "file": result["file"],
+        "job_title": result["job_title"],
+        "company": result["company"],
     }
 
 
