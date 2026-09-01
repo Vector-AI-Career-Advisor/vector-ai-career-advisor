@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Job, fetchJob } from '../api/jobs'
-import { uploadResume, getMyResume, generateCoverLetter } from '../api/resumes'
+import { uploadResume, getMyResume, generateCoverLetter, generateTailoredResume } from '../api/resumes'
 import { getLoginRecommendation } from '../api/agents'
 import './AgentChat.css'
 
@@ -185,6 +185,9 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   const [coverLetter, setCoverLetter] = useState<{ text: string; title: string; company: string } | null>(null)
   const [coverLetterState, setCoverLetterState] = useState<'idle' | 'generating' | 'error'>('idle')
   const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
+  const [resumeFit, setResumeFit] = useState<{ text: string; title: string; company: string } | null>(null)
+  const [resumeFitState, setResumeFitState] = useState<'idle' | 'generating' | 'error'>('idle')
+  const [resumeFitError, setResumeFitError] = useState<string | null>(null)
 
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
@@ -325,6 +328,32 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
     const link = document.createElement('a')
     link.href = url
     link.download = `cover-letter-${(coverLetter.company || 'job').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleGenerateResumeFit = async () => {
+    if (!selectedJob || resumeFitState === 'generating') return
+    setResumeFitState('generating')
+    setResumeFitError(null)
+    try {
+      const result = await generateTailoredResume(selectedJob.id)
+      setResumeFit({ text: result.tailored_resume, title: result.job_title, company: result.company })
+      setResumeFitState('idle')
+    } catch (error: any) {
+      setResumeFitState('error')
+      setResumeFitError(error.response?.data?.detail ?? 'Could not tailor your resume. Upload a resume and try again.')
+      setTimeout(() => setResumeFitState('idle'), 3000)
+    }
+  }
+
+  const downloadResumeFit = () => {
+    if (!resumeFit) return
+    const blob = new Blob([resumeFit.text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `resume-fit-${(resumeFit.company || 'job').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.txt`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -507,19 +536,48 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
           <button className="cover-letter-download" onClick={downloadCoverLetter}>Download edited letter</button>
         </div>
       )}
+      {resumeFit && (
+        <div className="cover-letter-editor resume-fit-editor" role="dialog" aria-label="Resume fit editor">
+          <div className="cover-letter-editor-header">
+            <div>
+              <p className="cover-letter-editor-title">Tailored resume</p>
+              <p className="cover-letter-editor-meta">{resumeFit.title}{resumeFit.company ? ` · ${resumeFit.company}` : ''}</p>
+            </div>
+            <button className="cover-letter-close" onClick={() => setResumeFit(null)} aria-label="Close editor">×</button>
+          </div>
+          <textarea
+            className="cover-letter-textarea"
+            value={resumeFit.text}
+            onChange={e => setResumeFit({ ...resumeFit, text: e.target.value })}
+            aria-label="Tailored resume text"
+          />
+          <button className="cover-letter-download" onClick={downloadResumeFit}>Download edited resume</button>
+        </div>
+      )}
       {coverLetterState === 'error' && <div className="agent-error cover-letter-error">{coverLetterError}</div>}
+      {resumeFitState === 'error' && <div className="agent-error cover-letter-error">{resumeFitError}</div>}
 
       {/* Input bar */}
       <div className="agent-input-bar">
         {selectedJob && (
-          <button
-            className="agent-cover-letter-btn"
-            onClick={handleGenerateCoverLetter}
-            disabled={coverLetterState === 'generating'}
-            title="Generate a cover letter for the selected job"
-          >
-            {coverLetterState === 'generating' ? 'Drafting…' : 'Draft cover letter'}
-          </button>
+          <>
+            <button
+              className="agent-fit-resume-btn"
+              onClick={handleGenerateResumeFit}
+              disabled={resumeFitState === 'generating'}
+              title="Tailor your resume to the selected job"
+            >
+              {resumeFitState === 'generating' ? 'Fitting…' : 'Fit resume'}
+            </button>
+            <button
+              className="agent-cover-letter-btn"
+              onClick={handleGenerateCoverLetter}
+              disabled={coverLetterState === 'generating'}
+              title="Generate a cover letter for the selected job"
+            >
+              {coverLetterState === 'generating' ? 'Drafting…' : 'Draft cover letter'}
+            </button>
+          </>
         )}
         {/* Resume upload button */}
         <button

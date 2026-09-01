@@ -35,7 +35,19 @@ export interface CoverLetter {
   skill_gaps?: string
 }
 
+export interface TailoredResume {
+  tailored_resume: string
+  job_title: string
+  company: string
+  file?: string
+}
+
 export const generateCoverLetter = async (jobId: string): Promise<CoverLetter> => {
   const { data } = await api.post<CoverLetter>('/agents/cover-letter', { job_id: jobId })
+  return data
+}
+
+export const generateTailoredResume = async (jobId: string): Promise<TailoredResume> => {
+  const { data } = await api.post<TailoredResume>('/agents/fit-resume', { job_id: jobId })
   return data
 }
