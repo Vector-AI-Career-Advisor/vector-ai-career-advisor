@@ -65,6 +65,8 @@
 .job-company {
   font-size: 0.8rem; font-weight: 500; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.07em;
+  min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .job-title {
