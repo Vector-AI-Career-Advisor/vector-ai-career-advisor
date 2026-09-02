@@ -23,8 +23,10 @@ from server.web.agents.resume.resume_tools import (
     set_current_user,
 )
 from server.web.agents.tools.mcp_client import set_current_user as set_mcp_user, reset_current_user as reset_mcp_user
+from server.web.agents.data.db_tools import set_current_user as set_db_user
 from server.web.agents.eval.evaluator_agent import run_evaluator_agent, EvaluationInput
 from server.web.features.resumes.repository import get_resume
+from server.web.features.profile import job_matching
 from server.db.postgres import get_connection, insert_evaluation
 from server.db.chroma import init_chroma, search_jobs as chroma_search
 
@@ -147,12 +149,22 @@ class LoginRecommendationResponse(BaseModel):
 @router.post("/login-recommendation", response_model=LoginRecommendationResponse)
 def login_recommendation(user_id: str = Depends(get_current_user)):
     resume = get_resume(int(user_id))
-    if not resume:
+    profile = job_matching.build_job_search_profile(int(user_id))
+
+    if not resume and not job_matching.has_signal(profile):
         return LoginRecommendationResponse(
-            reply="Welcome back! I don't have a resume on file for you yet — upload your "
-                  "resume and I'll recommend jobs that match your profile.",
+            reply="Welcome back! I don't have a resume or job preferences on file for you yet — "
+                  "upload a resume or set your preferences and I'll recommend matching jobs.",
             job_ids=[],
         )
+
+    parts: List[str] = []
+    if resume and resume.get("content"):
+        parts.append(resume["content"][:4000])
+    profile_terms = job_matching.query_text(profile)
+    if profile_terms.strip():
+        parts.append(profile_terms)
+    query = "\n".join(parts).strip() or " "
 
     today = date.today().isoformat()
     job_ids: List[str] = []
@@ -160,9 +172,15 @@ def login_recommendation(user_id: str = Depends(get_current_user)):
         collection = _login_collection()
         hits = chroma_search(
             collection,
-            (resume["content"] or "")[:4000],
-            n_results=15,
+            query,
+            n_results=40,
             where={"$and": [{"posted_at": today}, {"type": "full"}]},
+        )
+        hits = [h for h in hits if job_matching.matches_core(h.get("metadata", {}), profile["core"])]
+        hits = job_matching.apply_preferences(hits, profile["preferences"], 3)
+        hits.sort(
+            key=lambda h: job_matching.skill_rank(h.get("metadata", {}), profile["skills"]),
+            reverse=True,
         )
         seen: set = set()
         for h in hits:
@@ -179,7 +197,7 @@ def login_recommendation(user_id: str = Depends(get_current_user)):
     if not job_ids:
         return LoginRecommendationResponse(
             reply="Welcome back! I didn't find any new jobs posted today that match your "
-                  "resume — check back later or browse the full listings.",
+                  "resume and preferences — check back later or browse the full listings.",
             job_ids=[],
         )
 
@@ -187,7 +205,7 @@ def login_recommendation(user_id: str = Depends(get_current_user)):
     plural = "" if len(job_ids) == 1 else "s"
     return LoginRecommendationResponse(
         reply=f"Welcome back! Here {count_word} {len(job_ids)} job{plural} posted today "
-              f"that match your resume:",
+              f"that match your resume and preferences:",
         job_ids=job_ids,
     )
 
@@ -233,6 +251,7 @@ def fit_resume(req: CoverLetterRequest, user_id: str = Depends(get_current_user)
 @router.post("/chat")
 async def chat(req: ChatRequest, user_id: str = Depends(get_current_user)):
     set_current_user(int(user_id))
+    set_db_user(int(user_id))
 
     if req.job_id and re.search(r"cover[\s_-]*l(?:e|a)tter(?:s)?", req.message, re.IGNORECASE):
         async def generate_cover_letter_chat():
@@ -265,6 +284,12 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user)):
     message = req.message
     if req.job_id:
         message = f"[The user currently has job ID '{req.job_id}' open.]\n{message}"
+    try:
+        _profile = job_matching.build_job_search_profile(int(user_id))
+        if job_matching.has_signal(_profile):
+            message = f"[User profile — {job_matching.summarize_for_prompt(_profile)}]\n{message}"
+    except Exception:
+        log.exception("Failed to load job-search profile for user %s", user_id)
     lc_history.append(HumanMessage(content=message))
 
     async def generate():

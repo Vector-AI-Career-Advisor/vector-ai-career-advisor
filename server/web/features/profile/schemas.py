@@ -73,6 +73,19 @@ class PreferencesRequest(BaseModel):
     interests: Optional[List[str]] = None
 
 
+class JobCoreRequest(BaseModel):
+    min_experience: Optional[int] = None
+    max_experience: Optional[int] = None
+    education_level: Optional[str] = None  # none|bootcamp|associate|bachelor|master|phd
+
+
+class JobPreferencesRequest(BaseModel):
+    preferred_roles: List[str] = []
+    preferred_locations: List[str] = []
+    preferred_seniority: List[str] = []
+    remote_only: bool = False
+
+
 class ProfileResponse(BaseModel):
     id: int
     email: str

@@ -9,6 +9,7 @@ import {
   addSoftSkill,
   addLanguage,
   updatePreferences,
+  checkOnboardingStatus,
 } from '../api/profile'
 import './OnboardingWizard.css'
 
@@ -65,6 +66,20 @@ export default function OnboardingWizard() {
   const [dragging, setDragging] = useState(false)
   const [userEmail, setUserEmail] = useState<string>(getStoredUserEmail)
   const resumeInputRef = useRef<HTMLInputElement | null>(null)
+  // Guard: existing users who already finished onboarding never see the wizard.
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    checkOnboardingStatus()
+      .then((status) => {
+        if (cancelled) return
+        if (status?.completed) navigate('/jobs', { replace: true })
+        else setChecking(false)
+      })
+      .catch(() => { if (!cancelled) setChecking(false) })
+    return () => { cancelled = true }
+  }, [navigate])
 
   useEffect(() => {
     const storedEmail = getStoredUserEmail()
@@ -227,17 +242,28 @@ export default function OnboardingWizard() {
     try {
       await uploadResume(file)
       setResumeFile(file)
-      goNext()
+      // The server extracts name, experience, education, and skills from the
+      // resume — no need to walk the rest of the wizard.
+      navigate('/jobs')
     } catch (err) {
       console.error('Error uploading resume:', err)
-    } finally {
       setLoading(false)
     }
+  }
+
+  const skipOnboarding = () => {
+    navigate('/jobs')
   }
 
   const skipToPreferences = () => {
     setCurrentStep('preferences')
   }
+
+  const skipLink = (
+    <button type="button" className="onboarding-skip" onClick={skipOnboarding}>
+      Skip for now →
+    </button>
+  )
 
   const finishOnboarding = async () => {
     setLoading(true)
@@ -280,15 +306,21 @@ export default function OnboardingWizard() {
     }
   }
 
+  if (checking) {
+    return <div className="onboarding-container" />
+  }
+
   // ── Welcome Step ────────────────────────────────────────────────────────
   if (currentStep === 'welcome') {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <h1>Welcome</h1>
           <p style={{ fontSize: '1.25rem', fontWeight: 600 }}>Your tech career starts here</p>
           <p style={{ color: '#888', marginBottom: '2rem' }}>
-            Upload your resume and Vector profile details to get started. No resume yet? Start fresh and we will build one together.
+            Upload your resume and we will build your profile automatically — that is all it takes.
+            No resume yet? Fill in a few details instead, or skip and do it later.
           </p>
 
           <div
@@ -330,6 +362,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 1 OF 9</div>
           <h1>The basics</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>Quick intro. This shows up on your dashboard and resume.</p>
@@ -422,6 +455,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 2 OF 9</div>
           <h1>Where are you starting from?</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>Pick the option that best describes your situation.</p>
@@ -490,6 +524,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 3 OF 9</div>
           <h1>Education</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>Your academic background shapes your resume and helps us find the right opportunities for you.</p>
@@ -603,6 +638,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 4 OF 9</div>
           <h1>Skills and tools</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>Add the tools and technologies you use. These go straight into your resume and help us match you to the right roles.</p>
@@ -690,6 +726,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 5 OF 9</div>
           <h1>Soft skills and languages</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>These matter more than most people think. Add what you genuinely bring to a team.</p>
@@ -786,6 +823,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 6 OF 9</div>
           <h1>Work and service experience</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>Add jobs, internships, freelance, or military service. The more detail you include, the stronger your resume becomes.</p>
@@ -814,6 +852,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 7 OF 9</div>
           <h1>Everything else that makes you, you</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>Volunteering, certifications, hackathons, clubs. These help round out your profile and often make the difference in a competitive market.</p>
@@ -880,6 +919,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 8 OF 9</div>
           <h1>What excites you most?</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>Pick everything that genuinely resonates. This tells us what kind of work will keep you energized.</p>
@@ -982,6 +1022,7 @@ export default function OnboardingWizard() {
     return (
       <div className="onboarding-container">
         <div className="onboarding-card">
+          {skipLink}
           <div className="step-header">STEP 9 OF 9</div>
           <h1>You are all set!</h1>
           <p style={{ color: '#888', marginBottom: '2rem' }}>Your profile is ready. Vector will now show you opportunities tailored to your skills and preferences.</p>

@@ -83,7 +83,8 @@ export function OAuthCallback() {
       console.log('OAuth successful, storing token')
       localStorage.setItem('token', data.access_token)
       sessionStorage.setItem('vector_just_logged_in', '1')
-      navigate('/onboarding')
+      // Onboarding only for a brand-new account; returning users go straight in.
+      navigate(data.is_new_user ? '/onboarding' : '/jobs')
     }).catch((e) => {
       const errorMsg = e.response?.data?.detail || e.message || 'OAuth login failed'
       console.error('OAuth error:', { status: e.response?.status, message: errorMsg, fullError: e })

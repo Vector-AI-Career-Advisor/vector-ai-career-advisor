@@ -4,8 +4,10 @@ from features.profile import service
 from features.profile.schemas import (
     BasicInfoRequest, CareerStageRequest, EducationRequest, SkillRequest,
     SoftSkillRequest, LanguageRequest, WorkExperienceRequest, CertificationRequest,
-    VolunteeringRequest, ClubOrgRequest, PreferencesRequest, OnboardingStatusResponse
+    VolunteeringRequest, ClubOrgRequest, PreferencesRequest, OnboardingStatusResponse,
+    JobCoreRequest, JobPreferencesRequest
 )
+from server.web.features.profile import job_matching
 
 router = APIRouter()
 
@@ -32,6 +34,16 @@ def add_education(data: EducationRequest, user_id: str = Depends(get_current_use
 @router.get("/education")
 def get_education(user_id: str = Depends(get_current_user)):
     return service.get_education(int(user_id))
+
+
+@router.put("/education/{education_id}")
+def update_education(education_id: int, data: EducationRequest, user_id: str = Depends(get_current_user)):
+    return service.update_education(int(user_id), education_id, data)
+
+
+@router.delete("/education/{education_id}")
+def delete_education(education_id: int, user_id: str = Depends(get_current_user)):
+    return {"success": service.delete_education(int(user_id), education_id)}
 
 
 # ── Technical Skills ────────────────────────────────────────────────────────
@@ -88,6 +100,16 @@ def get_work_experience(user_id: str = Depends(get_current_user)):
     return service.get_work_experience(int(user_id))
 
 
+@router.put("/work-experience/{experience_id}")
+def update_work_experience(experience_id: int, data: WorkExperienceRequest, user_id: str = Depends(get_current_user)):
+    return service.update_work_experience(int(user_id), experience_id, data)
+
+
+@router.delete("/work-experience/{experience_id}")
+def delete_work_experience(experience_id: int, user_id: str = Depends(get_current_user)):
+    return {"success": service.delete_work_experience(int(user_id), experience_id)}
+
+
 # ── Certifications ───────────────────────────────────────────────────────────
 
 @router.post("/certifications")
@@ -119,6 +141,33 @@ def add_club_org(data: ClubOrgRequest, user_id: str = Depends(get_current_user))
 @router.post("/preferences")
 def update_preferences(data: PreferencesRequest, user_id: str = Depends(get_current_user)):
     return service.update_preferences(int(user_id), data)
+
+
+# ── Job-search profile: core (tier 1) & preferences (tier 2) ────────────────
+
+@router.get("/job-core")
+def get_job_core(user_id: str = Depends(get_current_user)):
+    return job_matching.get_job_core(int(user_id))
+
+
+@router.put("/job-core")
+def put_job_core(data: JobCoreRequest, user_id: str = Depends(get_current_user)):
+    return job_matching.update_job_core(int(user_id), data.model_dump())
+
+
+@router.get("/job-preferences")
+def get_job_preferences(user_id: str = Depends(get_current_user)):
+    return job_matching.get_job_preferences(int(user_id))
+
+
+@router.put("/job-preferences")
+def put_job_preferences(data: JobPreferencesRequest, user_id: str = Depends(get_current_user)):
+    return job_matching.update_job_preferences(int(user_id), data.model_dump())
+
+
+@router.get("/job-search-profile")
+def get_job_search_profile(user_id: str = Depends(get_current_user)):
+    return job_matching.build_job_search_profile(int(user_id))
 
 
 # ── Complete Profile ────────────────────────────────────────────────────────

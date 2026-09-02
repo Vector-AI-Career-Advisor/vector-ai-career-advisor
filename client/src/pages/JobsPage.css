@@ -266,9 +266,9 @@
 }
 .chip:hover { border-color: var(--border2); color: var(--text); }
 .chip.active {
-  background: rgba(124,90,247,0.15);
-  border-color: rgba(124,90,247,0.4);
-  color: var(--accent2);
+  background: var(--chip-bg);
+  border-color: var(--chip-border);
+  color: var(--chip-fg);
 }
 
 /* ── Save Filters button ── */
@@ -310,6 +310,55 @@
   color: var(--green);
   font-family: var(--font-mono);
   justify-content: center;
+}
+
+/* ── Saved filter presets ── */
+.saved-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.saved-preset { display: flex; align-items: stretch; gap: 0.35rem; }
+.saved-preset-apply {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.15s;
+}
+.saved-preset-apply:hover {
+  border-color: rgba(124,90,247,0.45);
+  background: rgba(124,90,247,0.12);
+  color: var(--accent2);
+}
+.saved-preset-delete {
+  flex-shrink: 0;
+  width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  transition: all 0.15s;
+}
+.saved-preset-delete:hover {
+  border-color: rgba(248,113,113,0.4);
+  color: var(--red);
+  background: rgba(248,113,113,0.08);
 }
 
 /* ── Main ── */

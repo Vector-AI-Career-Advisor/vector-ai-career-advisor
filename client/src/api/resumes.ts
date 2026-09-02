@@ -6,6 +6,22 @@ export interface ResumeInfo {
   updated_at: string
 }
 
+export interface ResumeListItem {
+  id: number
+  title: string | null
+  filename: string
+  is_active: boolean
+  skill_count: number
+  uploaded_at: string
+  updated_at: string
+}
+
+export interface ResumeDetail extends ResumeListItem {
+  content: string
+  skills: string[]
+  soft_skills: string[]
+}
+
 export const uploadResume = async (file: File): Promise<void> => {
   const form = new FormData()
   form.append('file', file)
@@ -24,8 +40,28 @@ export const getMyResume = async (): Promise<ResumeInfo | null> => {
   }
 }
 
-export const deleteResume = async (): Promise<void> => {
-  await api.delete('/resumes/me')
+export const listResumes = async (): Promise<ResumeListItem[]> => {
+  const { data } = await api.get<ResumeListItem[]>('/resumes')
+  return data
+}
+
+export const getResume = async (id: number): Promise<ResumeDetail> => {
+  const { data } = await api.get<ResumeDetail>(`/resumes/${id}`)
+  return data
+}
+
+export const setActiveResume = async (id: number): Promise<ResumeDetail> => {
+  const { data } = await api.patch<ResumeDetail>(`/resumes/${id}`, { is_active: true })
+  return data
+}
+
+export const renameResume = async (id: number, title: string): Promise<ResumeDetail> => {
+  const { data } = await api.patch<ResumeDetail>(`/resumes/${id}`, { title })
+  return data
+}
+
+export const deleteResume = async (id?: number): Promise<void> => {
+  await api.delete(id != null ? `/resumes/${id}` : '/resumes/me')
 }
 
 export interface CoverLetter {

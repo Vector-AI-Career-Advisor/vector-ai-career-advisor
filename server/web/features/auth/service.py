@@ -141,8 +141,9 @@ def _exchange_linkedin(code: str, redirect_uri: str) -> dict:
     }
 
 
-def _upsert_oauth_user(provider: str, provider_user_id: str, email: str, name: str | None) -> int:
-    """Return the Vector user id, creating the account if needed."""
+def _upsert_oauth_user(provider: str, provider_user_id: str, email: str, name: str | None) -> tuple[int, bool]:
+    """Return (Vector user id, is_new_account), creating the account if needed."""
+    is_new = False
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -180,6 +181,7 @@ def _upsert_oauth_user(provider: str, provider_user_id: str, email: str, name: s
                     (email, ""),  # no password for OAuth users
                 )
                 user_id = cur.fetchone()[0]
+                is_new = True
                 log.info("Created new user: email=%s, user_id=%d", email, user_id)
 
             cur.execute(
@@ -187,8 +189,8 @@ def _upsert_oauth_user(provider: str, provider_user_id: str, email: str, name: s
                 (user_id, provider, provider_user_id),
             )
         conn.commit()
-        log.info("OAuth identity linked: provider=%s email=%s user_id=%s", provider, email, user_id)
-        return user_id
+        log.info("OAuth identity linked: provider=%s email=%s user_id=%s new=%s", provider, email, user_id, is_new)
+        return user_id, is_new
     except Exception as exc:
         log.error("Error in _upsert_oauth_user: %s", str(exc), exc_info=True)
         raise
@@ -215,16 +217,16 @@ def oauth_login(body: OAuthCallbackRequest) -> TokenResponse:
         raise HTTPException(status_code=400, detail=str(exc))
 
     try:
-        user_id = _upsert_oauth_user(
+        user_id, is_new_user = _upsert_oauth_user(
             provider=body.provider,
             provider_user_id=info["provider_user_id"],
             email=info["email"],
             name=info.get("name"),
         )
-        log.info("User created/found with id: %d", user_id)
+        log.info("User created/found with id: %d (new=%s)", user_id, is_new_user)
         token = create_access_token(user_id)
         open_user_session(user_id)
-        return TokenResponse(access_token=token)
+        return TokenResponse(access_token=token, is_new_user=is_new_user)
     except Exception as exc:
         log.error("Failed to create/find user: %s", str(exc), exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))

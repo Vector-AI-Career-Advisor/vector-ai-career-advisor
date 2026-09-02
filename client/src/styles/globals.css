@@ -12,7 +12,7 @@ input, textarea { font-family: inherit; }
   /* backgrounds */
   --bg:           #0b0c12;
   --surface:      #13141e;
-  --surface2:     #1a1b28;
+  --surface2:     #2a2540;   /* brighter lavender-tinted secondary surface */
 
   /* borders */
   --border:       rgba(255,255,255,0.07);
@@ -36,6 +36,18 @@ input, textarea { font-family: inherit; }
   --green:        #34d399;
   --orange:       #fb923c;
   --red:          #f87171;
+
+  /* chips / skill tags — dark */
+  --chip-bg:            rgba(139,110,247,0.24);
+  --chip-fg:            #cfbdff;
+  --chip-fg-hi:         #e9e1ff;
+  --chip-border:        rgba(139,110,247,0.48);
+  --chip-border-hi:     rgba(139,110,247,0.72);
+  --chip-soft-bg:       rgba(45,191,184,0.16);
+  --chip-soft-fg:       #86e3db;
+  --chip-soft-fg-hi:    #b0ede8;
+  --chip-soft-border:   rgba(45,191,184,0.34);
+  --chip-soft-border-hi:rgba(45,191,184,0.6);
 
   /* component helpers */
   --input-bg:           rgba(255,255,255,0.04);
@@ -70,7 +82,7 @@ input, textarea { font-family: inherit; }
 [data-theme="light"] {
   --bg:           #f5f4f8;
   --surface:      #ffffff;
-  --surface2:     #ede9fe;
+  --surface2:     #f4f1ff;   /* brighter, cleaner lavender */
 
   --border:       rgba(0,0,0,0.08);
   --border2:      rgba(0,0,0,0.15);
@@ -90,6 +102,18 @@ input, textarea { font-family: inherit; }
   --green:        #059669;
   --orange:       #d97706;
   --red:          #dc2626;
+
+  /* chips / skill tags — light */
+  --chip-bg:            #ebe1ff;
+  --chip-fg:            #7c3aed;
+  --chip-fg-hi:         #6b21d6;
+  --chip-border:        rgba(124,58,237,0.30);
+  --chip-border-hi:     rgba(124,58,237,0.5);
+  --chip-soft-bg:       #dff6f0;
+  --chip-soft-fg:       #0f766e;
+  --chip-soft-fg-hi:    #115e59;
+  --chip-soft-border:   rgba(15,118,110,0.26);
+  --chip-soft-border-hi:rgba(15,118,110,0.48);
 
   --input-bg:           rgba(0,0,0,0.03);
   --input-focus-bg:     rgba(124,90,247,0.04);

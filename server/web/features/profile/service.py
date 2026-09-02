@@ -92,9 +92,47 @@ def get_education(user_id: int) -> List[dict]:
                 ORDER BY created_at DESC;
             """, (user_id,))
             rows = cur.fetchall()
-        
+
         cols = [desc[0] for desc in cur.description]
         return [dict(zip(cols, row)) for row in rows]
+    finally:
+        conn.close()
+
+
+def update_education(user_id: int, education_id: int, data: EducationRequest) -> dict:
+    """Update an education entry the user owns."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE user_educations
+                SET degree_type = %s, field_of_study = %s, school = %s, graduation_year = %s,
+                    relevant_courses = %s, academic_highlights = %s
+                WHERE id = %s AND user_id = %s
+                RETURNING id, user_id, degree_type, field_of_study, school, graduation_year, relevant_courses, academic_highlights, created_at;
+            """, (data.degree_type, data.field_of_study, data.school, data.graduation_year,
+                  data.relevant_courses, data.academic_highlights, education_id, user_id))
+            row = cur.fetchone()
+            cols = [desc[0] for desc in cur.description]
+        if row is None:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Education entry not found")
+        conn.commit()
+        log.info("Updated education %d for user %d", education_id, user_id)
+        return dict(zip(cols, row))
+    finally:
+        conn.close()
+
+
+def delete_education(user_id: int, education_id: int) -> bool:
+    """Delete an education entry the user owns."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM user_educations WHERE id = %s AND user_id = %s;", (education_id, user_id))
+            deleted = cur.rowcount > 0
+        conn.commit()
+        return deleted
     finally:
         conn.close()
 
@@ -261,12 +299,49 @@ def get_work_experience(user_id: int) -> List[dict]:
                 SELECT id, user_id, position, company, start_date, end_date, description, created_at
                 FROM user_work_experience
                 WHERE user_id = %s
-                ORDER BY start_date DESC;
+                ORDER BY start_date DESC NULLS LAST, created_at DESC;
             """, (user_id,))
             rows = cur.fetchall()
-        
+
         cols = [desc[0] for desc in cur.description]
         return [dict(zip(cols, row)) for row in rows]
+    finally:
+        conn.close()
+
+
+def update_work_experience(user_id: int, experience_id: int, data: WorkExperienceRequest) -> dict:
+    """Update a work-experience entry the user owns."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE user_work_experience
+                SET position = %s, company = %s, start_date = %s, end_date = %s, description = %s
+                WHERE id = %s AND user_id = %s
+                RETURNING id, user_id, position, company, start_date, end_date, description, created_at;
+            """, (data.position, data.company, data.start_date, data.end_date, data.description,
+                  experience_id, user_id))
+            row = cur.fetchone()
+            cols = [desc[0] for desc in cur.description]
+        if row is None:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Work experience entry not found")
+        conn.commit()
+        log.info("Updated work experience %d for user %d", experience_id, user_id)
+        return dict(zip(cols, row))
+    finally:
+        conn.close()
+
+
+def delete_work_experience(user_id: int, experience_id: int) -> bool:
+    """Delete a work-experience entry the user owns."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM user_work_experience WHERE id = %s AND user_id = %s;", (experience_id, user_id))
+            deleted = cur.rowcount > 0
+        conn.commit()
+        return deleted
     finally:
         conn.close()
 
