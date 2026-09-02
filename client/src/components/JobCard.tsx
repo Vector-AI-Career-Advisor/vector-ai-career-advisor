@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Job } from '../api/jobs'
 import './JobCard.css'
 
@@ -22,12 +23,18 @@ function timeAgo(dateStr?: string): string {
 
 export default function JobCard({ job, onClick }: Props) {
   const initials = (job.company ?? '?').slice(0, 2).toUpperCase()
+  const [logoBroken, setLogoBroken] = useState(false)
 
   return (
     <article className="job-card" onClick={onClick} tabIndex={0}
       onKeyDown={e => e.key === 'Enter' && onClick()}>
-      {/* Company avatar */}
-      <div className="job-avatar" aria-hidden="true">{initials}</div>
+      {/* Company logo, falling back to initials */}
+      {job.logo_url && !logoBroken ? (
+        <img className="job-logo" src={job.logo_url} alt="" aria-hidden="true"
+          onError={() => setLogoBroken(true)} />
+      ) : (
+        <div className="job-avatar" aria-hidden="true">{initials}</div>
+      )}
 
       <div className="job-body">
         <div className="job-meta-top">

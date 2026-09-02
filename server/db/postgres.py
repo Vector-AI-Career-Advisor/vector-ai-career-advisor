@@ -5,9 +5,20 @@ from datetime import date
 from typing import List, Optional
 import psycopg2
 from psycopg2.extras import execute_values
-from server.web.core.config import DB_CONFIG
+from server.web.core.config import DB_CONFIG, LOGO_URL_BASE
 
 log = logging.getLogger(__name__)
+
+
+def _apply_stored_logo(row: dict) -> dict:
+    """
+    Collapse a company_logos join (`logo_path`) into the `logo_url` field the
+    client reads: the stored /static image URL, or None when the company has no
+    logo on file.
+    """
+    path = row.pop("logo_path", None)
+    row["logo_url"] = f"{LOGO_URL_BASE}/{path}" if path else None
+    return row
 
 
 2# ── Connection ────────────────────────────────────────────────────────────────
@@ -267,13 +278,34 @@ def init_db(conn=None) -> None:
                     scraped_at       TIMESTAMP DEFAULT NOW()
                 );
             """)
-            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS logo_url TEXT;")
+            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_slug TEXT;")
+            # Per-job logo URLs were replaced by per-company stored images
+            # (company_logos table + config.LOGO_DIR). The scraped source URL now
+            # lives in company_logos.source_url.
+            cur.execute("ALTER TABLE jobs DROP COLUMN IF EXISTS logo_url;")
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS jobs_scraped_date_idx ON jobs ((scraped_at::date));
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_keyword_idx ON jobs (keyword);")
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_role_idx ON jobs (role);")
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_seniority_idx ON jobs (seniority);")
+            cur.execute("CREATE INDEX IF NOT EXISTS jobs_company_slug_idx ON jobs (company_slug);")
+
+            # ── Company logos ────────────────────────────────────────────────
+            # One row per company (keyed by utils.company_slug). The image file
+            # lives under config.LOGO_DIR; `logo_path` is its basename, or NULL
+            # when we tried and found none. `status`: 'pending' | 'ok' | 'missing'.
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS company_logos (
+                    company_slug  TEXT PRIMARY KEY,
+                    company_name  TEXT,
+                    logo_path     TEXT,
+                    source_url    TEXT,
+                    status        TEXT NOT NULL DEFAULT 'pending',
+                    fetched_at    TIMESTAMP,
+                    updated_at    TIMESTAMP DEFAULT NOW()
+                );
+            """)
 
             # ── Agent evaluations ─────────────────────────────────────────────
             cur.execute("""
@@ -376,7 +408,7 @@ def insert_jobs(conn, jobs: List[dict]) -> int:
             j.get("past_experience", []),
             j["keyword"], j.get("source", "linkedin"),
             _to_date(j.get("posted_at")),
-            j.get("logo_url"),
+            j.get("company_slug"),
         )
         for j in jobs
     ]
@@ -386,16 +418,91 @@ def insert_jobs(conn, jobs: List[dict]) -> int:
             INSERT INTO jobs (
                 id, title, role, seniority, company, location, url,
                 description, skills_must, skills_nice, yearsexperience,
-                past_experience, keyword, source, posted_at, logo_url
+                past_experience, keyword, source, posted_at, company_slug
             )
             VALUES %s
             ON CONFLICT (id) DO UPDATE SET
-                logo_url = EXCLUDED.logo_url
-                WHERE jobs.logo_url IS NULL AND EXCLUDED.logo_url IS NOT NULL;
+                company_slug = COALESCE(jobs.company_slug, EXCLUDED.company_slug);
         """, rows)
     conn.commit()
     log.info("Inserted %d jobs into PostgreSQL.", len(rows))
     return len(rows)
+
+
+# ── Company logos ────────────────────────────────────────────────────────────
+
+def backfill_company_slugs(conn) -> int:
+    """
+    Populate jobs.company_slug wherever it is NULL, using the same
+    utils.company_slug() the ETL insert path uses (so the two never diverge).
+    Returns the number of rows updated.
+    """
+    from server.etl.utils import company_slug  # local: keep server.db free of an etl import at module load
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, company FROM jobs WHERE company_slug IS NULL")
+        updates = [(company_slug(company), job_id) for job_id, company in cur.fetchall()]
+        updates = [u for u in updates if u[0] is not None]
+        if updates:
+            execute_values(
+                cur,
+                "UPDATE jobs SET company_slug = data.slug "
+                "FROM (VALUES %s) AS data(slug, id) WHERE jobs.id = data.id",
+                updates,
+            )
+    conn.commit()
+    return len(updates)
+
+
+def fetch_logo_status(conn) -> dict:
+    """Return {company_slug: status} for every row in company_logos."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT company_slug, status FROM company_logos")
+        return {slug: status for slug, status in cur.fetchall()}
+
+
+def fetch_companies_needing_logo(conn, *, force: bool = False) -> list:
+    """
+    (company_slug, company_name, source_url) for companies whose logo is worth
+    a (re)fetch, drawn from company_logos.source_url (persisted by the ETL /
+    a prior backfill run — jobs no longer carries the URL).
+
+    - default:  status='missing'
+    - force:    every row that has a source_url, regardless of status
+    """
+    where = "source_url IS NOT NULL" + ("" if force else " AND status = 'missing'")
+    with conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT company_slug, company_name, source_url
+            FROM company_logos
+            WHERE {where}
+            ORDER BY company_slug
+        """)
+        return cur.fetchall()
+
+
+def upsert_company_logo(conn, company_slug: str, company_name: str | None,
+                        logo_path: str | None, source_url: str | None,
+                        status: str) -> None:
+    """
+    Insert/update a company_logos row. Never downgrades an existing 'ok' row
+    (so a later failed re-fetch can't blank a working logo).
+    """
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO company_logos
+                (company_slug, company_name, logo_path, source_url, status, fetched_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+            ON CONFLICT (company_slug) DO UPDATE SET
+                company_name = EXCLUDED.company_name,
+                logo_path    = EXCLUDED.logo_path,
+                source_url   = EXCLUDED.source_url,
+                status       = EXCLUDED.status,
+                fetched_at   = NOW(),
+                updated_at   = NOW()
+            WHERE company_logos.status <> 'ok';
+        """, (company_slug, company_name, logo_path, source_url, status))
+    conn.commit()
 
 
 # ── Applications — Writes ─────────────────────────────────────────────────────
@@ -483,9 +590,11 @@ def fetch_applications_by_user(
             j.url,
             j.role,
             j.seniority,
-            j.logo_url
+            cl.logo_path
         FROM applications a
         JOIN jobs j ON j.id = a.job_id
+        LEFT JOIN company_logos cl
+               ON cl.company_slug = j.company_slug AND cl.status = 'ok'
         WHERE a.user_id = %s
     """
     params: list = [user_id]
@@ -499,7 +608,7 @@ def fetch_applications_by_user(
     with conn.cursor() as cur:
         cur.execute(query, params)
         cols = [desc[0] for desc in cur.description]
-        return [dict(zip(cols, row)) for row in cur.fetchall()]
+        return [_apply_stored_logo(dict(zip(cols, row))) for row in cur.fetchall()]
 
 
 def fetch_application(conn, user_id: int, job_id: str) -> Optional[dict]:
@@ -519,16 +628,18 @@ def fetch_application(conn, user_id: int, job_id: str) -> Optional[dict]:
                 j.url,
                 j.role,
                 j.seniority,
-                j.logo_url
+                cl.logo_path
             FROM applications a
             JOIN jobs j ON j.id = a.job_id
+            LEFT JOIN company_logos cl
+                   ON cl.company_slug = j.company_slug AND cl.status = 'ok'
             WHERE a.user_id = %s AND a.job_id = %s;
         """, (user_id, job_id))
         row_data = cur.fetchone()
         if row_data is None:
             return None
         cols = [desc[0] for desc in cur.description]
-        return dict(zip(cols, row_data))
+        return _apply_stored_logo(dict(zip(cols, row_data)))
 
 
 def count_applications_by_user(conn, user_id: int) -> dict:
@@ -625,7 +736,7 @@ def fetch_jobs_by_ids(conn, ids: List[str]) -> List[dict]:
         cur.execute("""
             SELECT id, title, role, seniority, company, location, url,
                    description, skills_must, skills_nice, yearsexperience,
-                   past_experience, keyword, source, posted_at, logo_url
+                   past_experience, keyword, source, posted_at, company_slug
             FROM jobs
             WHERE id = ANY(%s);
         """, (ids,))

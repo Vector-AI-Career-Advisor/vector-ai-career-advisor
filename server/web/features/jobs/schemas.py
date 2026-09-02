@@ -21,6 +21,7 @@ class JobOut(BaseModel):
     source: Optional[str]
     posted_at: Optional[date]
     scraped_at: Optional[datetime]
+    logo_url: Optional[str] = None
 
     class Config:
         from_attributes = True

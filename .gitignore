@@ -61,3 +61,6 @@ server/agents/tailored_resumes/
 
 tmp/
 /server/db/tailored_resumes/
+
+#Downloaded company logo images (see server/etl/logos.py)
+server/web/static/logos/

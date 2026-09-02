@@ -41,6 +41,14 @@
   box-shadow: 0 2px 8px rgba(124,90,247,0.3);
 }
 
+.job-logo {
+  flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: 10px;
+  object-fit: contain;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
 .job-body { flex: 1; min-width: 0; }
 
 .job-meta-top {

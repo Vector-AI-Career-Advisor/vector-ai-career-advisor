@@ -12,14 +12,21 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
-      proxy: {
-        '/auth':         { target: 'http://localhost:8000', changeOrigin: true },
-        '/profile':      { target: 'http://localhost:8000', changeOrigin: true },
-        '/jobs':         { target: 'http://localhost:8000', changeOrigin: true },
-        '/resumes':      { target: 'http://localhost:8000', changeOrigin: true },
-        '/applications': { target: 'http://localhost:8000', changeOrigin: true },
-        '/agents':       { target: 'http://localhost:8000', changeOrigin: true },
-      },
+      proxy: Object.fromEntries(
+        ['/auth', '/profile', '/jobs', '/resumes', '/applications', '/agents'].map(prefix => [
+          prefix,
+          {
+            target: 'http://localhost:8000',
+            changeOrigin: true,
+            // Several of these prefixes (e.g. /jobs, /auth/callback) are also
+            // client-side routes. Let full-page navigations fall through to the
+            // SPA instead of being proxied to the API (which would 401).
+            bypass(req: { headers: Record<string, string | undefined> }) {
+              if (req.headers.accept?.includes('text/html')) return '/index.html'
+            },
+          },
+        ]),
+      ),
     },
   }
 })

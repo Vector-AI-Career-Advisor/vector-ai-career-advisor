@@ -13,12 +13,14 @@ export default function JobDrawer({ job, onClose, chatWidth = 0 }: Props) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState(false)
+  const [logoBroken, setLogoBroken] = useState(false)
 
   // Reset dialog state whenever a different job is opened
   useEffect(() => {
     setShowConfirm(false)
     setApplying(false)
     setApplied(false)
+    setLogoBroken(false)
   }, [job?.id])
 
   if (!job) return null
@@ -61,9 +63,14 @@ export default function JobDrawer({ job, onClose, chatWidth = 0 }: Props) {
           </button>
 
           <div className="drawer-company-row">
-            <div className="drawer-avatar">
-              {(job.company ?? '?').slice(0, 2).toUpperCase()}
-            </div>
+            {job.logo_url && !logoBroken ? (
+              <img className="drawer-logo" src={job.logo_url} alt=""
+                onError={() => setLogoBroken(true)} />
+            ) : (
+              <div className="drawer-avatar">
+                {(job.company ?? '?').slice(0, 2).toUpperCase()}
+              </div>
+            )}
             <div>
               <p className="drawer-company">{job.company}</p>
               <p className="drawer-source">{job.source ?? 'linkedin'}</p>

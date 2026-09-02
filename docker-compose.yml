@@ -28,6 +28,7 @@ services:
       - .env
     volumes:
       - ./server/db/chroma_db:/app/server/db/chroma_db
+      - ./server/web/static/logos:/app/server/web/static/logos
     ports:
       - "8000:8000"
     depends_on:
