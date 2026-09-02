@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AuthPage, { OAuthCallback } from './pages/AuthPage'
 import JobsPage from './pages/JobsPage'
+import OnboardingWizard from './pages/OnboardingWizard'
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
 import TermsOfServicePage from './pages/TermsOfServicePage'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -21,6 +22,14 @@ export default function App() {
         <Route path="/auth/callback/:provider" element={<OAuthCallback />} />
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute>
+              <OnboardingWizard />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/jobs"
           element={
