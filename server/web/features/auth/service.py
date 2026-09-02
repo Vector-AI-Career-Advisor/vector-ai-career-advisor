@@ -146,6 +146,18 @@ def _upsert_oauth_user(provider: str, provider_user_id: str, email: str, name: s
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            # Ensure oauth_identities table exists
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS oauth_identities (
+                    id                 SERIAL PRIMARY KEY,
+                    user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    provider           TEXT NOT NULL,
+                    provider_user_id   TEXT NOT NULL,
+                    created_at         TIMESTAMP DEFAULT NOW(),
+                    UNIQUE (provider, provider_user_id)
+                );
+            """)
+            
             # Check by oauth identity
             cur.execute(
                 "SELECT user_id FROM oauth_identities WHERE provider=%s AND provider_user_id=%s",
@@ -153,6 +165,7 @@ def _upsert_oauth_user(provider: str, provider_user_id: str, email: str, name: s
             )
             row = cur.fetchone()
             if row:
+                log.info("Found existing OAuth user: provider=%s, user_id=%d", provider, row[0])
                 return row[0]
 
             # Check by email (link accounts)
@@ -160,20 +173,25 @@ def _upsert_oauth_user(provider: str, provider_user_id: str, email: str, name: s
             user_row = cur.fetchone()
             if user_row:
                 user_id = user_row[0]
+                log.info("Found existing user by email: %s, user_id=%d", email, user_id)
             else:
                 cur.execute(
                     "INSERT INTO users (email, password) VALUES (%s, %s) RETURNING id",
                     (email, ""),  # no password for OAuth users
                 )
                 user_id = cur.fetchone()[0]
+                log.info("Created new user: email=%s, user_id=%d", email, user_id)
 
             cur.execute(
                 "INSERT INTO oauth_identities (user_id, provider, provider_user_id) VALUES (%s,%s,%s)",
                 (user_id, provider, provider_user_id),
             )
         conn.commit()
-        log.info("OAuth login: provider=%s email=%s user_id=%s", provider, email, user_id)
+        log.info("OAuth identity linked: provider=%s email=%s user_id=%s", provider, email, user_id)
         return user_id
+    except Exception as exc:
+        log.error("Error in _upsert_oauth_user: %s", str(exc), exc_info=True)
+        raise
     finally:
         conn.close()
 
@@ -182,21 +200,34 @@ def oauth_login(body: OAuthCallbackRequest) -> TokenResponse:
     try:
         if body.provider == "google":
             info = _exchange_google(body.code, body.redirect_uri)
+            log.info("Google user info retrieved: %s", info.get("email"))
         elif body.provider == "linkedin":
             info = _exchange_linkedin(body.code, body.redirect_uri)
+            log.info("LinkedIn user info retrieved: %s", info.get("email"))
         else:
+            log.error("Unknown OAuth provider: %s", body.provider)
             raise HTTPException(status_code=400, detail=f"Unknown provider: {body.provider}")
     except httpx.HTTPStatusError as exc:
         log.error("OAuth token exchange failed: %s", exc)
         raise HTTPException(status_code=400, detail="OAuth token exchange failed")
+    except Exception as exc:
+        log.error("OAuth login error: %s", str(exc), exc_info=True)
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    user_id = _upsert_oauth_user(
-        provider=body.provider,
-        provider_user_id=info["provider_user_id"],
-        email=info["email"],
-        name=info.get("name"),
-    )
-    return TokenResponse(access_token=create_access_token(user_id))
+    try:
+        user_id = _upsert_oauth_user(
+            provider=body.provider,
+            provider_user_id=info["provider_user_id"],
+            email=info["email"],
+            name=info.get("name"),
+        )
+        log.info("User created/found with id: %d", user_id)
+        token = create_access_token(user_id)
+        open_user_session(user_id)
+        return TokenResponse(access_token=token)
+    except Exception as exc:
+        log.error("Failed to create/find user: %s", str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # ── Legal pages ───────────────────────────────────────────────────────────────

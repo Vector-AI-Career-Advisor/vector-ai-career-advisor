@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         '/auth':         { target: 'http://localhost:8000', changeOrigin: true },
+        '/profile':      { target: 'http://localhost:8000', changeOrigin: true },
         '/jobs':         { target: 'http://localhost:8000', changeOrigin: true },
         '/resumes':      { target: 'http://localhost:8000', changeOrigin: true },
         '/applications': { target: 'http://localhost:8000', changeOrigin: true },
