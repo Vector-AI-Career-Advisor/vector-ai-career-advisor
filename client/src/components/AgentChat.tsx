@@ -407,7 +407,6 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
 
   const showBackdrop = !hasUserInteracted
   const showMessages = messages.length > 0 || isTyping
-  const lastAgentId = [...messages].reverse().find(m => m.role === 'agent')?.id
 
   const activeResume = resumes.find(r => r.id === activeResumeId)
   const activeResumeName = activeResume ? (activeResume.title || activeResume.filename) : 'None'
@@ -416,6 +415,18 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
     <div className="agent-chat">
       {/* Header */}
       <div className="agent-header">
+        <div className="agent-avatar">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2v3"/>
+            <circle cx="12" cy="2" r="1" fill="currentColor" stroke="none"/>
+            <rect x="2" y="5" width="20" height="14" rx="6"/>
+            <circle cx="9" cy="11" r="1.8" fill="currentColor" stroke="none"/>
+            <circle cx="15" cy="11" r="1.8" fill="currentColor" stroke="none"/>
+            <path d="M9 15 Q12 17.5 15 15"/>
+            <path d="M2 10H0"/><path d="M22 10h2"/>
+          </svg>
+        </div>
         <div>
           <p className="agent-name">Career Agent</p>
           <p className="agent-status">
@@ -556,20 +567,6 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
                         })}
                       </span>
                     </div>
-                    {msg.id === lastAgentId && !isTyping && (
-                      <div className="agent-bubble-avatar">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                          stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 2v3"/>
-                          <circle cx="12" cy="2" r="1" fill="currentColor" stroke="none"/>
-                          <rect x="2" y="5" width="20" height="14" rx="6"/>
-                          <circle cx="9" cy="11" r="1.8" fill="currentColor" stroke="none"/>
-                          <circle cx="15" cy="11" r="1.8" fill="currentColor" stroke="none"/>
-                          <path d="M9 15 Q12 17.5 15 15"/>
-                          <path d="M2 10H0"/><path d="M22 10h2"/>
-                        </svg>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="bubble user">

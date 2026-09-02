@@ -20,8 +20,9 @@
 }
 
 .agent-avatar {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: rgba(124,90,247,0.15);
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(48, 191, 184, 0.12);
+  border: 1px solid rgba(48, 191, 184, 0.2);
   color: var(--accent2);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
@@ -128,20 +129,6 @@
 
 .message-content .bubble {
   max-width: 100%;
-}
-
-.agent-bubble-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(48, 191, 184, 0.12);
-  border: 1px solid rgba(48, 191, 184, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent2);
-  opacity: 0.85;
-  margin-left: -14px;
 }
 
 /* ── Agent chain ─────────────────────────────────────────────────────────── */

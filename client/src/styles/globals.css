@@ -17,7 +17,7 @@ input, textarea { font-family: inherit; }
   /* borders */
   --border:       rgba(255,255,255,0.07);
   --border2:      rgba(255,255,255,0.13);
-  --drag-line:    #5238bf;   /* darker violet */
+  --drag-line:    #39344d;   /* muted desaturated lavender-grey */
 
   /* text */
   --text:         #f0f0fa;
@@ -87,7 +87,7 @@ input, textarea { font-family: inherit; }
 
   --border:       rgba(0,0,0,0.08);
   --border2:      rgba(0,0,0,0.15);
-  --drag-line:    #7c5af7;   /* violet */
+  --drag-line:    #c4bedb;   /* muted desaturated lavender-grey */
 
   --text:         #0f0f1a;
   --muted:        #6b6b82;
