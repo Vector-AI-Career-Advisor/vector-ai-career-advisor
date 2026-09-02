@@ -14,6 +14,7 @@ export interface Job {
   skills_nice?: string[]
   yearsexperience?: number
   past_experience?: string[]
+  education?: string[]
   keyword?: string
   source?: string
   posted_at?: string

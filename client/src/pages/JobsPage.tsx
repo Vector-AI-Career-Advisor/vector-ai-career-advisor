@@ -11,22 +11,15 @@ import StatsPage from './StatsPage'
 import ProfilePage from './ProfilePage'
 import ApplicationsPage from './ApplicationsPage'
 import ThemeToggle from '../components/ThemeToggle'
-import { savePreset, loadPresets, deletePreset, type FilterPreset } from '../lib/presets'
-import { SENIORITIES, ROLE_OPTIONS, LOCATION_OPTIONS } from '../constants'
+import {
+  listSavedFilters, createSavedFilter, deleteSavedFilter, type SavedFilter,
+} from '../api/savedFilters'
+import { summarizeFilterInline } from '../lib/filterSummary'
+import {
+  SENIORITIES, ROLE_OPTIONS, LOCATION_OPTIONS, POSTED_DATE_OPTIONS, EXP_MIN, EXP_MAX,
+} from '../constants'
 import './JobsPage.css'
 
-const POSTED_DATE_OPTIONS = [
-  { value: '', label: 'Anytime' },
-  { value: 'last_24h', label: 'Last 24 hours' },
-  { value: 'last_3d', label: 'Last 3 days' },
-  { value: 'last_week', label: 'Last week' },
-  { value: 'last_2w', label: 'Last 2 weeks' },
-  { value: 'last_month', label: 'Last month' },
-]
-// Years-of-experience range slider bounds. A range spanning the full extent is
-// treated as "no filter" so jobs with an unspecified experience level still show.
-const EXP_MIN = 0
-const EXP_MAX = 15
 const LIMIT = 50
 
 type Tab = 'jobs' | 'stats' | 'applications' | 'profile'
@@ -61,7 +54,7 @@ export default function JobsPage() {
   const [showSaveModal, setShowSaveModal]   = useState(false)
   const [presetName, setPresetName]         = useState('')
   const [savedMsg, setSavedMsg]             = useState(false)
-  const [presets, setPresets]               = useState<FilterPreset[]>([])
+  const [presets, setPresets]               = useState<SavedFilter[]>([])
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
@@ -97,11 +90,14 @@ export default function JobsPage() {
   }, [expRange])
 
   // Keep the saved-filter list in sync whenever we switch tabs
-  useEffect(() => { setPresets(loadPresets()) }, [activeTab])
+  const reloadPresets = useCallback(() => {
+    listSavedFilters().then(setPresets).catch(() => setPresets([]))
+  }, [])
+  useEffect(() => { reloadPresets() }, [activeTab, reloadPresets])
 
-  const handleDeletePreset = (id: string) => {
-    deletePreset(id)
-    setPresets(loadPresets())
+  const handleDeletePreset = async (id: number) => {
+    await deleteSavedFilter(id).catch(() => {})
+    reloadPresets()
   }
 
   const load = useCallback(async () => {
@@ -192,25 +188,22 @@ export default function JobsPage() {
   const expFiltered = expRange[0] > EXP_MIN || expRange[1] < EXP_MAX
   const hasFilters = keyword || seniorities.length > 0 || postedDate || roles.length > 0 || expFiltered || locations.length > 0 || skills.length > 0
 
-  // Apply a saved preset from ProfilePage
+  // Apply a saved filter — replaces the whole filter state, then shows Jobs.
   const handleApplyFilter = (filters: JobFilters) => {
-    if (filters.keyword   !== undefined) setKeyword(filters.keyword ?? '')
-    if (filters.seniority !== undefined) setSeniorities(filters.seniority ? filters.seniority.split(',') : [])
-    if (filters.location  !== undefined) setLocations(filters.location ? [filters.location] : [])
-    if (filters.posted_date !== undefined) setPostedDate(filters.posted_date ?? '')
-    if (filters.roles !== undefined) setRoles(filters.roles ?? [])
-    if (filters.years_experience_min !== undefined || filters.years_experience_max !== undefined) {
-      setExpRange([filters.years_experience_min ?? EXP_MIN, filters.years_experience_max ?? EXP_MAX])
-    }
-    if (filters.skills !== undefined) setSkills(filters.skills ?? [])
+    setKeyword(filters.keyword ?? '')
+    setSeniorities(filters.seniority ? filters.seniority.split(',') : [])
+    setLocations(filters.location ? [filters.location] : [])
+    setPostedDate(filters.posted_date ?? '')
+    setRoles(filters.roles ?? [])
+    setExpRange([filters.years_experience_min ?? EXP_MIN, filters.years_experience_max ?? EXP_MAX])
+    setSkills(filters.skills ?? [])
     setActiveTab('jobs')
   }
 
-  // Save current filters as a preset
-  const handleSavePreset = () => {
+  // Save current filters as a named, DB-persisted preset
+  const handleSavePreset = async () => {
     if (!presetName.trim()) return
-    savePreset({
-      name: presetName.trim(),
+    await createSavedFilter(presetName.trim(), {
       keyword:  keyword  || undefined,
       seniority: seniorities.length > 0 ? seniorities.join(',') : undefined,
       location: locations.length > 0 ? locations[0] : undefined,
@@ -219,8 +212,8 @@ export default function JobsPage() {
       years_experience_min: expRange[0] > EXP_MIN ? expRange[0] : undefined,
       years_experience_max: expRange[1] < EXP_MAX ? expRange[1] : undefined,
       skills: skills.length > 0 ? skills : undefined,
-    })
-    setPresets(loadPresets())
+    }).catch(() => {})
+    reloadPresets()
     setPresetName('')
     setShowSaveModal(false)
     setSavedMsg(true)
@@ -335,7 +328,7 @@ export default function JobsPage() {
       {/* ── Profile view ── */}
       {activeTab === 'profile' && (
         <div className="stats-view">
-          <ProfilePage />
+          <ProfilePage onApplyFilter={handleApplyFilter} />
         </div>
       )}
 
@@ -562,17 +555,8 @@ export default function JobsPage() {
                         <li key={p.id} className="saved-preset">
                           <button
                             className="saved-preset-apply"
-                            title="Apply this filter set"
-                            onClick={() => handleApplyFilter({
-                              keyword: p.keyword,
-                              seniority: p.seniority,
-                              location: p.location,
-                              posted_date: p.posted_date,
-                              roles: p.roles,
-                              years_experience_min: p.years_experience_min,
-                              years_experience_max: p.years_experience_max,
-                              skills: p.skills,
-                            })}
+                            title={summarizeFilterInline(p.filters)}
+                            onClick={() => handleApplyFilter(p.filters)}
                           >
                             {p.name}
                           </button>

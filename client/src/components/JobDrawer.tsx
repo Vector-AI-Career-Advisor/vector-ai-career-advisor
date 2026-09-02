@@ -130,6 +130,16 @@ export default function JobDrawer({ job, onClose, chatWidth = 0 }: Props) {
             </Section>
           )}
 
+          <Section title="Relevant Education">
+            {job.education && job.education.length > 0 ? (
+              <ul className="exp-list">
+                {job.education.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            ) : (
+              <p className="drawer-empty">No specific degree requirements in this posting.</p>
+            )}
+          </Section>
+
           {job.past_experience && job.past_experience.length > 0 && (
             <Section title="Relevant Experience">
               <ul className="exp-list">

@@ -82,7 +82,7 @@ def build_chroma_metadata(job: dict) -> dict:
     scalar_fields = ("id", "title", "role", "seniority", "company",
                      "location", "region", "url", "yearsexperience", "keyword",
                      "source", "company_slug")
-    list_fields   = ("skills_must", "skills_nice", "past_experience")
+    list_fields   = ("skills_must", "skills_nice", "past_experience", "education")
 
     meta = {}
 

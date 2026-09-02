@@ -20,6 +20,11 @@ import {
   ROLE_OPTIONS, LOCATION_OPTIONS, SENIORITIES, EDUCATION_LEVELS, EXPERIENCE_OPTIONS,
   CAREER_STAGE_OPTIONS, humanizeCareerStage,
 } from '../constants'
+import {
+  listSavedFilters, deleteSavedFilter,
+  type SavedFilter, type SavedFilterBody,
+} from '../api/savedFilters'
+import { summarizeFilter } from '../lib/filterSummary'
 import './ProfilePage.css'
 
 type SummaryUser = ProfileSummary['user']
@@ -30,7 +35,12 @@ const EMPTY_USER: SummaryUser = {}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ProfilePage() {
+interface ProfilePageProps {
+  /** Apply a saved filter and jump to the Jobs tab (wired from JobsPage). */
+  onApplyFilter?: (filters: SavedFilterBody) => void
+}
+
+export default function ProfilePage({ onApplyFilter }: ProfilePageProps = {}) {
   const [email, setEmail]         = useState<string | null>(null)
   const [memberSince, setMemberSince] = useState<string | null>(null)
   const [resume, setResume]       = useState<ResumeInfo | null>(null)
@@ -120,6 +130,21 @@ export default function ProfilePage() {
     getJobCore().then(setCore).catch(() => {/* ignore */})
     getJobPreferences().then(setPrefsForm).catch(() => {/* ignore */})
   }, [])
+
+  // ── Saved job-search filters ───────────────────────────────────────────
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([])
+  const [expandedFilter, setExpandedFilter] = useState<number | null>(null)
+
+  const reloadSavedFilters = useCallback(() => {
+    listSavedFilters().then(setSavedFilters).catch(() => setSavedFilters([]))
+  }, [])
+  useEffect(() => { reloadSavedFilters() }, [reloadSavedFilters])
+
+  const handleDeleteSavedFilter = async (id: number) => {
+    await deleteSavedFilter(id).catch(() => {})
+    if (expandedFilter === id) setExpandedFilter(null)
+    reloadSavedFilters()
+  }
 
   const toggleResumeSkills = async (id: number) => {
     if (expandedResume === id) { setExpandedResume(null); return }
@@ -281,12 +306,12 @@ export default function ProfilePage() {
           <ExperienceSection rows={experienceList} reload={loadEduExp} />
 
           <div className="mini-section">
-            <div className="mini-title">Job filters</div>
+            <div className="mini-title">Work preferences</div>
             <div className="skill-tags">
               {Object.entries(prefs).filter(([, value]) => value).map(([key]) => (
                 <span key={key} className="skill-tag pref">{key}</span>
               ))}
-              {!Object.keys(prefs).length && <span className="muted-empty">No preference filters saved yet.</span>}
+              {!Object.keys(prefs).length && <span className="muted-empty">No work preferences set yet.</span>}
             </div>
           </div>
         </div>
@@ -380,6 +405,81 @@ export default function ProfilePage() {
               </span>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* ── Saved job filters ──────────────────────────────────────── */}
+      <section className="profile-section">
+        <SectionHeader
+          title="Job filters"
+          badge={savedFilters.length ? `${savedFilters.length}` : 'None'}
+          active={savedFilters.length > 0}
+        />
+        <div className="profile-card">
+          <p className="card-hint">
+            Filter sets you saved from the Jobs page. Expand one to see exactly what it matches.
+          </p>
+
+          {savedFilters.length === 0 ? (
+            <span className="muted-empty">
+              No saved filters yet — build a search on the Jobs page and hit “Save filter”.
+            </span>
+          ) : (
+            <ul className="saved-filter-list">
+              {savedFilters.map(f => {
+                const facets = summarizeFilter(f.filters)
+                const open = expandedFilter === f.id
+                return (
+                  <li key={f.id} className={`saved-filter-item ${open ? 'is-open' : ''}`}>
+                    <div className="saved-filter-head">
+                      <button
+                        className="saved-filter-toggle"
+                        onClick={() => setExpandedFilter(open ? null : f.id)}
+                        aria-expanded={open}
+                      >
+                        <span className={`saved-filter-chevron ${open ? 'open' : ''}`}><ChevronIcon /></span>
+                        <span className="saved-filter-name">{f.name}</span>
+                        <span className="saved-filter-count">
+                          {facets.length ? `${facets.length} ${facets.length === 1 ? 'criterion' : 'criteria'}` : 'no criteria'}
+                        </span>
+                      </button>
+                      <div className="saved-filter-actions">
+                        {onApplyFilter && (
+                          <button className="btn-replace" onClick={() => onApplyFilter(f.filters)}>
+                            Apply
+                          </button>
+                        )}
+                        <button
+                          className="btn-delete-resume"
+                          onClick={() => handleDeleteSavedFilter(f.id)}
+                          aria-label={`Delete ${f.name}`}
+                        >
+                          <TrashIcon />
+                        </button>
+                      </div>
+                    </div>
+
+                    {open && (
+                      <div className="saved-filter-detail">
+                        {facets.length ? (
+                          <dl className="filter-facets">
+                            {facets.map(x => (
+                              <div key={x.label} className="filter-facet">
+                                <dt>{x.label}</dt>
+                                <dd>{x.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        ) : (
+                          <span className="muted-empty">Matches everything — no criteria set.</span>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
       </section>
 
@@ -1008,6 +1108,15 @@ function TrashIcon() {
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
       <path d="M10 11v6M14 11v6"/>
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6"/>
     </svg>
   )
 }

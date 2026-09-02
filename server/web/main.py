@@ -22,6 +22,7 @@ from features.resumes.router import router as resumes_router
 from features.profile.router import router as profile_router
 from features.stats.router import router as stats_router
 from features.applications.router import router as applications_router
+from features.saved_filters.router import router as saved_filters_router
 from features.agents.router import router as agent_router
 from server.db.postgres import init_db, get_connection
 from server.web.core.config import STATIC_DIR, LOGO_DIR
@@ -93,6 +94,7 @@ app.include_router(stats_router,   prefix="/jobs",    tags=["jobs"])   # /jobs/s
 app.include_router(jobs_router,    prefix="/jobs",    tags=["jobs"])
 app.include_router(resumes_router,      prefix="/resumes",      tags=["resumes"])
 app.include_router(applications_router, prefix="/applications", tags=["applications"])
+app.include_router(saved_filters_router, prefix="/saved-filters", tags=["saved-filters"])
 app.include_router(agent_router,        prefix="/agents",       tags=["agents"])
 
 @app.get("/")

@@ -18,6 +18,7 @@ class JobOut(BaseModel):
     skills_nice: Optional[List[str]]
     yearsexperience: Optional[int]
     past_experience: Optional[List[str]]
+    education: Optional[List[str]] = None
     keyword: Optional[str]
     source: Optional[str]
     posted_at: Optional[date]

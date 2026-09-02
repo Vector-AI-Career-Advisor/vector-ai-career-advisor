@@ -1,6 +1,7 @@
 from typing import Optional, List
 from datetime import datetime, timedelta
 from server.db.postgres import get_connection, _apply_stored_logo
+from server.etl.skills import normalize_skills
 
 LIMIT = 50
 
@@ -76,8 +77,12 @@ def list_jobs(
             filters.append("yearsexperience <= %s")
             params.append(years_experience_max)
         
-        # Skills filter (check if any of the skills are in skills_must or skills_nice)
-        if skills and len(skills) > 0:
+        # Skills filter (check if any of the skills are in skills_must or
+        # skills_nice). Stored skills are canonical, and array containment is
+        # exact, so the typed filter goes through the same normalisation —
+        # "k8s", "c programming" and "C/C++" all reach the stored spelling.
+        skills = normalize_skills(list(skills)) if skills else []
+        if skills:
             skill_filters = []
             for skill in skills:
                 skill_filters.append(f"(skills_must @> ARRAY[%s] OR skills_nice @> ARRAY[%s])")
@@ -95,7 +100,7 @@ def list_jobs(
                 SELECT COUNT(*) OVER() AS total_count,
                        j.id, j.title, j.role, j.seniority, j.company, j.location, j.region, j.url,
                        j.description, j.skills_must, j.skills_nice, j.yearsexperience,
-                       j.past_experience, j.keyword, j.source, j.posted_at, j.scraped_at,
+                       j.past_experience, j.education, j.keyword, j.source, j.posted_at, j.scraped_at,
                        cl.logo_path
                 FROM jobs j
                 LEFT JOIN company_logos cl
@@ -131,7 +136,7 @@ def get_job(job_id: str) -> Optional[dict]:
             cur.execute("""
                 SELECT j.id, j.title, j.role, j.seniority, j.company, j.location, j.region, j.url,
                        j.description, j.skills_must, j.skills_nice, j.yearsexperience,
-                       j.past_experience, j.keyword, j.source, j.posted_at, j.scraped_at,
+                       j.past_experience, j.education, j.keyword, j.source, j.posted_at, j.scraped_at,
                        cl.logo_path
                 FROM jobs j
                 LEFT JOIN company_logos cl

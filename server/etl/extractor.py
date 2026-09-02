@@ -107,6 +107,43 @@ def extract_with_claude(title: str, description: str) -> dict:
     return _empty_extraction()
 
 
+_EDUCATION_PROMPT = (
+    "You extract degree requirements from a job posting. Return ONLY a JSON "
+    'object: {"education": [...]}. Each entry is one degree requirement or '
+    "preference, keeping the level and field together (e.g. \"BSc in Computer "
+    'Science", "Bachelor\'s in a STEM field", "MSc in Statistics - advantage"). '
+    "Note when it is only preferred/an advantage. Return an empty list if the "
+    "text says nothing about degrees, education, or academic background. Never "
+    "invent a default degree. Respond in English."
+)
+
+
+def extract_education(title: str, text: str) -> list[str]:
+    """Focused, single-field extraction used by scripts/backfill_education.py to
+    populate `jobs.education` on rows that predate the field."""
+    if not text:
+        return []
+    try:
+        resp = _client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=400,
+            temperature=0,
+            system=_EDUCATION_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"Job Title: {title}\n\nJob Text:\n{text[:6000]}\n\nJSON:",
+            }],
+        )
+        raw = resp.content[0].text.strip()
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        data = json.loads(match.group(0) if match else raw)
+        val = data.get("education", [])
+        return [str(v).strip() for v in val if v] if isinstance(val, list) else []
+    except (anthropic.APIError, json.JSONDecodeError, AttributeError) as e:
+        log.warning("education extraction failed for %r: %s", title, e)
+        return []
+
+
 def extract_all_parallel(stubs: list[dict]) -> list[dict]:
     """
     Run LLM-based extraction with a small thread pool.
@@ -157,6 +194,7 @@ def extract_all_parallel(stubs: list[dict]) -> list[dict]:
             "skills_nice":     extracted["skills_nice"],
             "yearsexperience": extracted["yearsexperience"],
             "past_experience": extracted["past_experience"],
+            "education":       extracted["education"],
             "posted_at":       stub.get("posted_at"),
             "keyword":         stub["keyword"],
             "source":          "linkedin",
@@ -218,6 +256,7 @@ def _empty_extraction() -> dict:
         "skills_must":     [],
         "skills_nice":     [],
         "past_experience": [],
+        "education":       [],
     }
 
 
@@ -234,8 +273,11 @@ def _validate(data: dict, title: str) -> dict:
         if key in {"skills_must", "skills_nice"}:
             result[key] = normalize_skills(val)
 
-        elif key == "past_experience":
-            result[key] = [str(v) for v in val if v] if isinstance(val, list) else []
+        elif key in {"past_experience", "education"}:
+            result[key] = (
+                [s for s in (str(v).strip() for v in val if v) if s]
+                if isinstance(val, list) else []
+            )
 
         elif key == "yearsexperience":
             try:

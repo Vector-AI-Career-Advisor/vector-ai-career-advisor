@@ -282,6 +282,9 @@ def init_db(conn=None) -> None:
             # Normalised region for jobs.location (server/etl/locations.py) —
             # one of Tel Aviv / Center / Sharon / Haifa / North / South / Jerusalem.
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS region TEXT;")
+            # Degree requirements / preferences pulled from the description by the
+            # LLM extractor — e.g. {"BSc in Computer Science", "MSc — advantage"}.
+            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS education TEXT[];")
             # Per-job logo URLs were replaced by per-company stored images
             # (company_logos table + config.LOGO_DIR). The scraped source URL now
             # lives in company_logos.source_url.
@@ -359,6 +362,23 @@ def init_db(conn=None) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS applications_user_idx   ON applications (user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS applications_status_idx ON applications (status);")
 
+            # ── Saved job-search filters ─────────────────────────────────────
+            # One row per named filter set a user saves in the Jobs sidebar.
+            # `filters` is the client's JobFilters object (keyword, seniority,
+            # location, posted_date, roles, years_experience_min/max, skills).
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS saved_filters (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    name       TEXT    NOT NULL,
+                    filters    JSONB   NOT NULL DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE (user_id, name)
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS saved_filters_user_idx ON saved_filters (user_id);")
+
             # ── Pipeline stats ───────────────────────────────────────────────
             # Single-row table the ETL pipeline is the sole writer of — lets the
             # web app read a cheap, server-wide job count without ever
@@ -413,6 +433,7 @@ def insert_jobs(conn, jobs: List[dict]) -> int:
             j["keyword"], j.get("source", "linkedin"),
             _to_date(j.get("posted_at")),
             j.get("company_slug"), j.get("region"),
+            j.get("education", []),
         )
         for j in jobs
     ]
@@ -422,11 +443,15 @@ def insert_jobs(conn, jobs: List[dict]) -> int:
             INSERT INTO jobs (
                 id, title, role, seniority, company, location, url,
                 description, skills_must, skills_nice, yearsexperience,
-                past_experience, keyword, source, posted_at, company_slug, region
+                past_experience, keyword, source, posted_at, company_slug, region,
+                education
             )
             VALUES %s
             ON CONFLICT (id) DO UPDATE SET
-                company_slug = COALESCE(jobs.company_slug, EXCLUDED.company_slug);
+                company_slug = COALESCE(jobs.company_slug, EXCLUDED.company_slug),
+                -- backfill only: fill `education` on a re-scrape when the row
+                -- predates the field, without disturbing the original extraction
+                education    = COALESCE(jobs.education, EXCLUDED.education);
         """, rows)
     conn.commit()
     log.info("Inserted %d jobs into PostgreSQL.", len(rows))
@@ -658,6 +683,50 @@ def count_applications_by_user(conn, user_id: int) -> dict:
         return {row[0]: row[1] for row in cur.fetchall()}
 
 
+# ── Saved job-search filters ─────────────────────────────────────────────────
+
+def upsert_saved_filter(conn, user_id: int, name: str, filters: dict) -> dict:
+    """Create a named filter set, or overwrite one that already has this name."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO saved_filters (user_id, name, filters)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id, name) DO UPDATE
+                SET filters = EXCLUDED.filters, updated_at = NOW()
+            RETURNING id, name, filters, created_at, updated_at;
+        """, (user_id, name, json.dumps(filters)))
+        cols = [desc[0] for desc in cur.description]
+        row = dict(zip(cols, cur.fetchone()))
+    conn.commit()
+    log.info("Saved filter '%s' for user %d (id=%d).", name, user_id, row["id"])
+    return row
+
+
+def fetch_saved_filters(conn, user_id: int) -> List[dict]:
+    """All saved filter sets for a user, newest first."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, name, filters, created_at, updated_at
+            FROM saved_filters
+            WHERE user_id = %s
+            ORDER BY created_at DESC;
+        """, (user_id,))
+        cols = [desc[0] for desc in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def delete_saved_filter(conn, user_id: int, filter_id: int) -> bool:
+    """Remove one saved filter. Returns True if a row was deleted."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM saved_filters WHERE id = %s AND user_id = %s;",
+            (filter_id, user_id),
+        )
+        deleted = cur.rowcount > 0
+    conn.commit()
+    return deleted
+
+
 # ── Reads ─────────────────────────────────────────────────────────────────────
 
 def count_jobs(conn) -> int:
@@ -740,7 +809,8 @@ def fetch_jobs_by_ids(conn, ids: List[str]) -> List[dict]:
         cur.execute("""
             SELECT id, title, role, seniority, company, location, url,
                    description, skills_must, skills_nice, yearsexperience,
-                   past_experience, keyword, source, posted_at, company_slug, region
+                   past_experience, keyword, source, posted_at, company_slug, region,
+                   education
             FROM jobs
             WHERE id = ANY(%s);
         """, (ids,))
@@ -771,6 +841,32 @@ def update_job_skills(conn, updates: List[tuple]) -> int:
         cur.executemany(
             "UPDATE jobs SET skills_must = %s, skills_nice = %s WHERE id = %s;",
             [(must, nice, job_id) for job_id, must, nice in updates],
+        )
+    return len(updates)
+
+
+def fetch_jobs_missing_education(conn) -> List[dict]:
+    """Jobs that predate the `education` extraction field — id + the text the
+    education-only backfill needs. Used by scripts/backfill_education.py."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, title, description
+            FROM jobs
+            WHERE education IS NULL
+            ORDER BY scraped_at DESC;
+        """)
+        return [{"id": r[0], "title": r[1], "description": r[2]} for r in cur.fetchall()]
+
+
+def update_job_education(conn, updates: List[tuple]) -> int:
+    """Bulk-set jobs.education from a list of (job_id, education_list) tuples.
+    Does not commit — the caller controls the transaction."""
+    if not updates:
+        return 0
+    with conn.cursor() as cur:
+        cur.executemany(
+            "UPDATE jobs SET education = %s WHERE id = %s;",
+            [(edu, job_id) for job_id, edu in updates],
         )
     return len(updates)
 

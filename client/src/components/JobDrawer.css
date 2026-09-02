@@ -148,6 +148,8 @@
 
 .drawer-desc { color: var(--muted); font-size: 0.88rem; line-height: 1.75; white-space: pre-wrap; }
 
+.drawer-empty { color: var(--muted); font-size: 0.85rem; font-style: italic; opacity: 0.75; }
+
 .exp-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
 .exp-list li {
   display: flex; align-items: flex-start; gap: 0.6rem;

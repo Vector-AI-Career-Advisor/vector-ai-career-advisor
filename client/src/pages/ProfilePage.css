@@ -547,3 +547,96 @@ select.entry-input {
   flex-basis: 100%; margin-top: 0.6rem; padding-top: 0.75rem;
   border-top: 1px solid var(--rc-divider);
 }
+/* ── Saved job filters ──────────────────────────────────────────────────── */
+.saved-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0;
+}
+.saved-filter-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface2);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.saved-filter-item.is-open { border-color: rgba(124, 90, 247, 0.45); }
+
+.saved-filter-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem 0.55rem 0.7rem;
+}
+.saved-filter-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: none;
+  border: none;
+  padding: 0.15rem 0;
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+}
+.saved-filter-chevron {
+  display: inline-flex;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.saved-filter-chevron.open { transform: rotate(90deg); color: var(--accent); }
+
+.saved-filter-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.saved-filter-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.saved-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.saved-filter-detail {
+  padding: 0.2rem 0.8rem 0.85rem 1.65rem;
+  border-top: 1px solid var(--border);
+}
+.filter-facets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.65rem 0 0;
+}
+.filter-facet {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.filter-facet dt {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding-top: 0.1rem;
+}
+.filter-facet dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}

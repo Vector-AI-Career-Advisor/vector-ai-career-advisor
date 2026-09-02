@@ -59,6 +59,20 @@ export const LOCATION_OPTIONS = [
   'Remote',
 ]
 
+export const POSTED_DATE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Anytime' },
+  { value: 'last_24h', label: 'Last 24 hours' },
+  { value: 'last_3d', label: 'Last 3 days' },
+  { value: 'last_week', label: 'Last week' },
+  { value: 'last_2w', label: 'Last 2 weeks' },
+  { value: 'last_month', label: 'Last month' },
+]
+
+// Years-of-experience range-slider bounds (Jobs filter). A range spanning the
+// full extent is treated as "no filter".
+export const EXP_MIN = 0
+export const EXP_MAX = 15
+
 export const EDUCATION_LEVELS: { value: string; label: string }[] = [
   { value: '', label: 'No preference' },
   { value: 'none', label: 'No degree required' },
