@@ -27,6 +27,46 @@ function SimpleMarkdown({ children }: { children: string }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />
 }
 
+// ─── Typewriter reveal — renders text word-by-word like a streaming LLM chat ──
+function TypewriterMarkdown({
+  text,
+  animate,
+  onProgress,
+}: {
+  text: string
+  animate: boolean
+  onProgress?: () => void
+}) {
+  // ["word", " ", "word", "\n", …] — whitespace is kept as its own token so
+  // slicing + join reproduces the original string exactly.
+  const tokensRef = useRef<string[]>(text.split(/(\s+)/))
+  const [count, setCount] = useState(animate ? 0 : tokensRef.current.length)
+
+  useEffect(() => {
+    if (!animate) return
+    const total = tokensRef.current.length
+    // Reveal faster for long replies so they always finish in ~3s.
+    const step = Math.max(2, Math.ceil(total / 120))
+    const id = setInterval(() => {
+      setCount(c => {
+        const next = Math.min(c + step, total)
+        if (next >= total) clearInterval(id)
+        return next
+      })
+    }, 28)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    onProgress?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count])
+
+  const shown = tokensRef.current.slice(0, count).join('')
+  return <SimpleMarkdown>{shown}</SimpleMarkdown>
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type Role = 'user' | 'agent' | 'system'
@@ -43,6 +83,7 @@ interface Message {
   timestamp: Date
   agentsUsed?: AgentStep[]
   jobIds?: string[]
+  animate?: boolean
 }
 
 const AGENT_LABELS: Record<string, string> = {
@@ -211,7 +252,7 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
       .then(({ reply, job_ids }) => {
         setMessages(prev => [
           ...prev,
-          { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), jobIds: job_ids },
+          { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), jobIds: job_ids, animate: true },
         ])
       })
       .catch(() => {})
@@ -222,6 +263,9 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
+
+  // Keep the view pinned to the bottom while a reply types itself out
+  const scrollToBottom = () => bottomRef.current?.scrollIntoView({ block: 'end' })
 
   // Load the user's resumes so the active one can be shown / switched
   useEffect(() => {
@@ -291,7 +335,7 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
       setPendingAgents([])
       setMessages(prev => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), agentsUsed, jobIds },
+        { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), agentsUsed, jobIds, animate: true },
       ])
     } catch {
       setPendingAgents([])
@@ -492,7 +536,11 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
                   <div className="message-content">
                     <div className="bubble agent">
                       <div className="msg-text">
-                        <SimpleMarkdown>{msg.text}</SimpleMarkdown>
+                        <TypewriterMarkdown
+                          text={msg.text}
+                          animate={!!msg.animate}
+                          onProgress={scrollToBottom}
+                        />
                       </div>
                       {msg.jobIds && msg.jobIds.length > 0 && (
                         <div className="job-mini-cards">

@@ -10,13 +10,14 @@ input, textarea { font-family: inherit; }
 ══════════════════════════════════════════════ */
 :root, [data-theme="dark"] {
   /* backgrounds */
-  --bg:           #0b0c12;
+  --bg:           #0a0d1c;   /* near-black with a blue tint */
   --surface:      #13141e;
   --surface2:     #2a2540;   /* brighter lavender-tinted secondary surface */
 
   /* borders */
   --border:       rgba(255,255,255,0.07);
   --border2:      rgba(255,255,255,0.13);
+  --drag-line:    #5238bf;   /* darker violet */
 
   /* text */
   --text:         #f0f0fa;
@@ -73,19 +74,20 @@ input, textarea { font-family: inherit; }
   --font-mono:    'DM Mono', monospace;
 
   /* navbar */
-  --navbar-bg:    rgba(11,12,18,0.88);
+  --navbar-bg:    rgba(10,13,28,0.88);
 }
 
 /* ══════════════════════════════════════════════
    DESIGN TOKENS  –  light
 ══════════════════════════════════════════════ */
 [data-theme="light"] {
-  --bg:           #f5f4f8;
+  --bg:           #eaeefb;   /* light gray with a blue tint */
   --surface:      #ffffff;
   --surface2:     #f4f1ff;   /* brighter, cleaner lavender */
 
   --border:       rgba(0,0,0,0.08);
   --border2:      rgba(0,0,0,0.15);
+  --drag-line:    #7c5af7;   /* violet */
 
   --text:         #0f0f1a;
   --muted:        #6b6b82;
@@ -126,7 +128,7 @@ input, textarea { font-family: inherit; }
   --toggle-bg-h:        rgba(0,0,0,0.09);
   --toggle-c:           #4a4a60;
 
-  --navbar-bg:    rgba(245,244,248,0.92);
+  --navbar-bg:    rgba(234,238,251,0.92);
 }
 
 /* ══════════════════════════════════════════════
