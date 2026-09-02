@@ -15,11 +15,14 @@ const seniorityColor: Record<string, string> = {
   principal:  'tag-red',
 }
 
+function isValidDate(dateStr?: string): boolean {
+  return !!dateStr && !Number.isNaN(new Date(dateStr).getTime())
+}
+
 function timeAgo(dateStr?: string): string {
-  if (!dateStr) return ''
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const days = Math.floor(diff / 86400000)
-  if (days === 0) return 'Today'
+  if (!isValidDate(dateStr)) return ''
+  const days = Math.floor((Date.now() - new Date(dateStr as string).getTime()) / 86400000)
+  if (days <= 0) return 'Today'
   if (days === 1) return 'Yesterday'
   if (days < 7) return `${days}d ago`
   if (days < 30) return `${Math.floor(days / 7)}w ago`
@@ -39,7 +42,9 @@ export default function JobCard({ job, onClick }: Props) {
       <div className="job-body">
         <div className="job-meta-top">
           <span className="job-company">{job.company ?? 'Unknown'}</span>
-          <span className="job-posted">{timeAgo(job.scraped_at)}</span>
+          <span className="job-posted">
+            {timeAgo(isValidDate(job.posted_at) ? job.posted_at : job.scraped_at)}
+          </span>
         </div>
 
         <h3 className="job-title">{job.title ?? 'Untitled Role'}</h3>

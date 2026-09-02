@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { Job, fetchJob } from '../api/jobs'
-import { generateCoverLetter, generateTailoredResume } from '../api/resumes'
+import {
+  generateCoverLetter,
+  generateTailoredResume,
+  listResumes,
+  setActiveResume,
+  ResumeListItem,
+} from '../api/resumes'
 import { getLoginRecommendation } from '../api/agents'
 import './AgentChat.css'
 
@@ -186,9 +192,14 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   const [resumeFit, setResumeFit] = useState<{ text: string; title: string; company: string } | null>(null)
   const [resumeFitState, setResumeFitState] = useState<'idle' | 'generating' | 'error'>('idle')
   const [resumeFitError, setResumeFitError] = useState<string | null>(null)
+  const [resumes, setResumes] = useState<ResumeListItem[]>([])
+  const [activeResumeId, setActiveResumeId] = useState<number | null>(null)
+  const [resumeMenuOpen, setResumeMenuOpen] = useState(false)
+  const [switchingResume, setSwitchingResume] = useState(false)
 
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
+  const resumeMenuRef = useRef<HTMLDivElement>(null)
 
   // Fire a one-shot job recommendation right after a fresh login
   useEffect(() => {
@@ -211,6 +222,44 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
+
+  // Load the user's resumes so the active one can be shown / switched
+  useEffect(() => {
+    listResumes()
+      .then(rows => {
+        setResumes(rows)
+        setActiveResumeId(rows.find(r => r.is_active)?.id ?? null)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Close the resume dropdown on an outside click
+  useEffect(() => {
+    if (!resumeMenuOpen) return
+    const onDocClick = (e: MouseEvent) => {
+      if (resumeMenuRef.current && !resumeMenuRef.current.contains(e.target as Node)) {
+        setResumeMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [resumeMenuOpen])
+
+  const handleSelectActiveResume = async (id: number) => {
+    setResumeMenuOpen(false)
+    if (id === activeResumeId || switchingResume) return
+    const previous = activeResumeId
+    setActiveResumeId(id)
+    setSwitchingResume(true)
+    try {
+      await setActiveResume(id)
+      setResumes(rs => rs.map(r => ({ ...r, is_active: r.id === id })))
+    } catch {
+      setActiveResumeId(previous)
+    } finally {
+      setSwitchingResume(false)
+    }
+  }
 
 
   const send = async (text: string) => {
@@ -316,6 +365,9 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   const showMessages = messages.length > 0 || isTyping
   const lastAgentId = [...messages].reverse().find(m => m.role === 'agent')?.id
 
+  const activeResume = resumes.find(r => r.id === activeResumeId)
+  const activeResumeName = activeResume ? (activeResume.title || activeResume.filename) : 'None'
+
   return (
     <div className="agent-chat">
       {/* Header */}
@@ -344,6 +396,43 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
 
       {selectedJob && (
         <div className="agent-action-bar">
+          {resumes.length > 0 && (
+            <div className="resume-picker" ref={resumeMenuRef}>
+              <button
+                className="resume-picker-btn"
+                onClick={() => setResumeMenuOpen(o => !o)}
+                disabled={switchingResume}
+                aria-haspopup="listbox"
+                aria-expanded={resumeMenuOpen}
+                title="Change which resume the web app and agents use"
+              >
+                <span className="resume-picker-label">
+                  Current active resume: <strong>{activeResumeName}</strong>
+                </span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {resumeMenuOpen && (
+                <ul className="resume-picker-menu" role="listbox">
+                  {resumes.map(r => (
+                    <li key={r.id}>
+                      <button
+                        className={`resume-picker-item ${r.id === activeResumeId ? 'is-active' : ''}`}
+                        onClick={() => handleSelectActiveResume(r.id)}
+                        role="option"
+                        aria-selected={r.id === activeResumeId}
+                      >
+                        <span className="resume-picker-item-name">{r.title || r.filename}</span>
+                        {r.id === activeResumeId && <span className="resume-picker-check">✓</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           <button
             className="agent-fit-resume-btn"
             onClick={handleGenerateResumeFit}
