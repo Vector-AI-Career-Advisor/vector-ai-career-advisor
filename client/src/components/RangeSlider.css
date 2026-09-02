@@ -1,0 +1,98 @@
+.range-slider {
+  position: relative;
+  height: 40px;
+  padding: 0 9px; /* half a thumb, so thumb centres line up with 0% / 100% */
+}
+
+/* base rail + highlighted segment between the thumbs */
+.range-slider .rs-rail,
+.range-slider .rs-fill {
+  position: absolute;
+  top: 11px;
+  height: 4px;
+  border-radius: 2px;
+}
+.range-slider .rs-rail {
+  left: 9px;
+  right: 9px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+.range-slider .rs-fill {
+  background: var(--accent);
+}
+
+/* Two range inputs stacked on the same line. The input is inert; only its
+   thumb is interactive, so both thumbs can be grabbed independently. */
+.range-slider .rs-input {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: none;
+}
+.range-slider .rs-input::-webkit-slider-runnable-track {
+  background: transparent;
+  border: none;
+}
+.range-slider .rs-input::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+
+.range-slider .rs-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+  transition: transform 0.12s ease;
+}
+.range-slider .rs-input::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.range-slider .rs-input:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  transform: scale(1.15);
+}
+.range-slider .rs-input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.range-slider .rs-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+}
+.range-slider .rs-input:active::-moz-range-thumb {
+  cursor: grabbing;
+}
+
+.range-slider .rs-bounds {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}

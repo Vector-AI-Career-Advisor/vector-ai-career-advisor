@@ -80,8 +80,10 @@ def search_jobs(
         where.append("seniority = %s")
         params.append(seniority)
     if location:
-        where.append("location ILIKE %s")
-        params.append(f"%{location}%")
+        # location holds a canonical city; region holds Tel Aviv / Center /
+        # Sharon / Haifa / North / South / Jerusalem. Match either.
+        where.append("(region ILIKE %s OR location ILIKE %s)")
+        params += [f"%{location}%", f"%{location}%"]
     if max_years is not None:
         where.append("yearsexperience <= %s")
         params.append(max_years)
@@ -90,7 +92,7 @@ def search_jobs(
         params.append(keyword)
 
     sql = (
-        "SELECT id, title, company, location, url, role, seniority, "
+        "SELECT id, title, company, location, region, url, role, seniority, "
         "yearsexperience, skills_must FROM jobs"
     )
     if where:

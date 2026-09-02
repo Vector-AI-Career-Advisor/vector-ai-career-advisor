@@ -13,6 +13,11 @@ export const CAREER_STAGE_LABELS: Record<string, string> = {
   returning: 'Returning after a break',
 }
 
+// Picker options for the profile summary editor — derived from the labels
+// above so the two never drift apart.
+export const CAREER_STAGE_OPTIONS: { value: string; label: string }[] =
+  Object.entries(CAREER_STAGE_LABELS).map(([value, label]) => ({ value, label }))
+
 export function humanizeCareerStage(value?: string | null): string {
   if (!value) return 'Not set'
   return (
@@ -41,12 +46,16 @@ export const ROLE_OPTIONS = [
   'Other',
 ]
 
+// Normalised regions produced by server/etl/locations.py — the job filter and
+// profile "preferred locations" both match jobs.region against these.
 export const LOCATION_OPTIONS = [
+  'Tel Aviv',
   'Center',
-  'Hashrom',
-  'South',
+  'Sharon',
+  'Haifa',
   'North',
-  'Shfela',
+  'South',
+  'Jerusalem',
   'Remote',
 ]
 

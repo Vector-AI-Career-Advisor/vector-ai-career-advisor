@@ -240,11 +240,16 @@
 /* ── Profile snapshot card ──────────────────────────────────────────────── */
 .profile-summary-card { display: flex; flex-direction: column; }
 
+/* Editable basics block — spacing lives on the wrapper so the read-only grid
+   and the edit form leave the same gap above the Education section. */
+.summary-section { margin-bottom: 1.5rem; }
+.summary-section .mini-head { margin-bottom: 0.5rem; }
+.summary-section .upload-msg { margin-top: 0.75rem; }
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.75rem;
-  margin-bottom: 1.5rem;
 }
 .summary-grid > div {
   display: flex;
@@ -338,16 +343,35 @@
   width: 100%; box-sizing: border-box;
   padding: 0.5rem 0.65rem; border-radius: var(--radius);
   background: var(--surface); border: 1px solid var(--border);
-  color: var(--text); font-size: 0.85rem; outline: none;
+  color: var(--text); font-size: 0.85rem; line-height: 1.4; outline: none;
   transition: border-color 0.15s;
 }
 .entry-input::placeholder { color: var(--muted); opacity: 0.6; }
 .entry-input:focus { border-color: var(--accent); }
 
+/* Drop the native select chrome so the box matches the text inputs exactly
+   (same font, padding and line-height), then draw our own caret. */
+select.entry-input {
+  cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  padding-right: 1.9rem;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239292ac' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+}
+
 .entry-edit-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.9rem; }
+
+/* Basics editor — five fields on a 6-track grid so both rows fill exactly
+   (3 across, then stage + years) instead of leaving a dead half-cell. */
+.basics-grid { grid-template-columns: repeat(6, 1fr); }
+.basics-grid > .field { grid-column: span 2; }
+.basics-grid > .field-stage { grid-column: span 4; }
 
 @media (max-width: 700px) {
   .entry-edit-grid { grid-template-columns: 1fr; }
+  .basics-grid { grid-template-columns: 1fr; }
+  .basics-grid > .field, .basics-grid > .field-stage { grid-column: auto; }
 }
 
 /* ── Skills & preferences editable cards ─────────────────────────────────── */

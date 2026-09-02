@@ -26,6 +26,10 @@ export default function JobDrawer({ job, onClose, chatWidth = 0 }: Props) {
 
   if (!job) return null
 
+  const place = [job.location, job.region]
+    .filter((v, i, a) => v && a.indexOf(v) === i)
+    .join(', ')
+
   const availableWidth = window.innerWidth - chatWidth
   const drawerWidth = Math.min(680, Math.max(420, availableWidth - 60))
   const drawerLeft = Math.max(12, (availableWidth - drawerWidth) / 2)
@@ -81,7 +85,7 @@ export default function JobDrawer({ job, onClose, chatWidth = 0 }: Props) {
           <h2 className="drawer-title">{job.title}</h2>
 
           <div className="drawer-meta">
-            {job.location && <span className="dmeta"><LocationIcon />{job.location}</span>}
+            {place && <span className="dmeta"><LocationIcon />{place}</span>}
             {job.seniority && <span className="dmeta"><LevelIcon />{job.seniority}</span>}
             {job.yearsexperience != null && (
               <span className="dmeta"><ExpIcon />{job.yearsexperience}yr exp</span>

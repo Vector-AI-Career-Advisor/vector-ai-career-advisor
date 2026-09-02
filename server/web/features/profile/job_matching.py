@@ -263,13 +263,15 @@ def matches_core(meta: dict, core: dict) -> bool:
 
 def _pref_match(meta: dict, prefs: dict) -> bool:
     location = (meta.get("location") or "").lower()
+    region = (meta.get("region") or "").lower()
+    place = f"{location} {region}".strip()
     seniority = (meta.get("seniority") or "").lower()
 
     locs = [l.lower() for l in prefs.get("preferred_locations", []) if l]
     if prefs.get("remote_only"):
-        if "remote" not in location:
+        if "remote" not in place:
             return False
-    elif locs and not any(l in location or location in l for l in locs):
+    elif locs and not any(l in place or (place and place in l) for l in locs):
         return False
 
     sens = [s.lower() for s in prefs.get("preferred_seniority", []) if s]

@@ -17,6 +17,7 @@ from server.web.core.config import (
     VALID_ROLES,
     VALID_SENIORITY,
 )
+from .locations import normalize_location
 from .skills import normalize_skills
 from .utils import company_slug
 
@@ -141,11 +142,13 @@ def extract_all_parallel(stubs: list[dict]) -> list[dict]:
     for stub, extracted in zip(valid_stubs, results):
         if extracted is None:
             extracted = _empty_extraction()
+        city, region = normalize_location(stub["location"])
         job = {
             "id":              stub["id"],
             "title":           stub["title"],
             "company":         stub["company"],
-            "location":        stub["location"],
+            "location":        city,
+            "region":          region,
             "url":             stub["url"],
             "role":            extracted["role"],
             "seniority":       extracted["seniority"],

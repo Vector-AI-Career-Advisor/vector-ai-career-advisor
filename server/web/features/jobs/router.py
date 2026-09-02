@@ -16,6 +16,7 @@ def list_jobs(
     posted_date: Optional[str] = Query(None),
     roles: Optional[List[str]] = Query(None),
     years_experience_min: Optional[int] = Query(None),
+    years_experience_max: Optional[int] = Query(None),
     skills: Optional[List[str]] = Query(None),
     limit: int = Query(repository.LIMIT),
     offset: int = Query(0),
@@ -30,6 +31,7 @@ def list_jobs(
         skills,
         limit,
         offset,
+        years_experience_max=years_experience_max,
     )
 
 

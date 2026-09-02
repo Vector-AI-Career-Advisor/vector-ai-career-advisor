@@ -249,6 +249,13 @@
   letter-spacing: 0.09em;
   color: var(--muted);
 }
+.filter-label-value {
+  float: right;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--text);
+}
 
 .filter-input {
   background: var(--surface2);

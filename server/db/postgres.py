@@ -279,6 +279,9 @@ def init_db(conn=None) -> None:
                 );
             """)
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_slug TEXT;")
+            # Normalised region for jobs.location (server/etl/locations.py) —
+            # one of Tel Aviv / Center / Sharon / Haifa / North / South / Jerusalem.
+            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS region TEXT;")
             # Per-job logo URLs were replaced by per-company stored images
             # (company_logos table + config.LOGO_DIR). The scraped source URL now
             # lives in company_logos.source_url.
@@ -290,6 +293,7 @@ def init_db(conn=None) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_role_idx ON jobs (role);")
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_seniority_idx ON jobs (seniority);")
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_company_slug_idx ON jobs (company_slug);")
+            cur.execute("CREATE INDEX IF NOT EXISTS jobs_region_idx ON jobs (region);")
 
             # ── Company logos ────────────────────────────────────────────────
             # One row per company (keyed by utils.company_slug). The image file
@@ -408,7 +412,7 @@ def insert_jobs(conn, jobs: List[dict]) -> int:
             j.get("past_experience", []),
             j["keyword"], j.get("source", "linkedin"),
             _to_date(j.get("posted_at")),
-            j.get("company_slug"),
+            j.get("company_slug"), j.get("region"),
         )
         for j in jobs
     ]
@@ -418,7 +422,7 @@ def insert_jobs(conn, jobs: List[dict]) -> int:
             INSERT INTO jobs (
                 id, title, role, seniority, company, location, url,
                 description, skills_must, skills_nice, yearsexperience,
-                past_experience, keyword, source, posted_at, company_slug
+                past_experience, keyword, source, posted_at, company_slug, region
             )
             VALUES %s
             ON CONFLICT (id) DO UPDATE SET
@@ -736,7 +740,7 @@ def fetch_jobs_by_ids(conn, ids: List[str]) -> List[dict]:
         cur.execute("""
             SELECT id, title, role, seniority, company, location, url,
                    description, skills_must, skills_nice, yearsexperience,
-                   past_experience, keyword, source, posted_at, company_slug
+                   past_experience, keyword, source, posted_at, company_slug, region
             FROM jobs
             WHERE id = ANY(%s);
         """, (ids,))
@@ -767,6 +771,30 @@ def update_job_skills(conn, updates: List[tuple]) -> int:
         cur.executemany(
             "UPDATE jobs SET skills_must = %s, skills_nice = %s WHERE id = %s;",
             [(must, nice, job_id) for job_id, must, nice in updates],
+        )
+    return len(updates)
+
+
+def fetch_all_job_locations(conn) -> List[dict]:
+    """Return [{id, location, region}] for every job — used by the
+    location-normalisation backfill (scripts/backfill_locations.py)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, location, region FROM jobs;")
+        return [{"id": r[0], "location": r[1], "region": r[2]} for r in cur.fetchall()]
+
+
+def update_job_locations(conn, updates: List[tuple]) -> int:
+    """Bulk-update jobs.location / jobs.region.
+
+    `updates` is a list of (job_id, location, region) tuples. Does not commit —
+    the caller controls the transaction. Returns the number of rows sent.
+    """
+    if not updates:
+        return 0
+    with conn.cursor() as cur:
+        cur.executemany(
+            "UPDATE jobs SET location = %s, region = %s WHERE id = %s;",
+            [(location, region, job_id) for job_id, location, region in updates],
         )
     return len(updates)
 

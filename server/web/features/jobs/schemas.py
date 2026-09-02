@@ -11,6 +11,7 @@ class JobOut(BaseModel):
     seniority: Optional[str]
     company: Optional[str]
     location: Optional[str]
+    region: Optional[str] = None
     url: Optional[str]
     description: Optional[str]
     skills_must: Optional[List[str]]

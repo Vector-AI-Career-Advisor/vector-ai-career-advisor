@@ -7,6 +7,7 @@ export interface Job {
   seniority?: string
   company?: string
   location?: string
+  region?: string
   url?: string
   description?: string
   skills_must?: string[]

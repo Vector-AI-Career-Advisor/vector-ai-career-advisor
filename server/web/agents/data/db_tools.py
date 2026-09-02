@@ -77,7 +77,7 @@ def semantic_search_jobs(query: str, n_results: int = 5):
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT id, title, company, role, location, url, description FROM jobs WHERE id = ANY(%s)",
+                "SELECT id, title, company, role, location, region, url, description FROM jobs WHERE id = ANY(%s)",
                 (job_ids,),
             )
             rows = {r["id"]: dict(r) for r in cur.fetchall()}
@@ -145,7 +145,7 @@ def find_jobs_for_me(n_results: int = 8):
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT id, title, company, role, location, url, description FROM jobs WHERE id = ANY(%s)",
+                "SELECT id, title, company, role, location, region, url, description FROM jobs WHERE id = ANY(%s)",
                 (job_ids,),
             )
             rows = {r["id"]: dict(r) for r in cur.fetchall()}
@@ -203,10 +203,11 @@ def get_job_aggregate(operation: str, column: str, role_filter: Optional[str] = 
 @tool
 def get_column_distribution(column: str, limit: int = 15):
     """Get top items and their counts for a given column.
-    - column: one of ['role', 'seniority', 'location', 'company', 'yearsexperience']
-    Examples: top companies, seniority breakdown, most common roles
+    - column: one of ['role', 'seniority', 'location', 'region', 'company', 'yearsexperience']
+      ('location' is the city; 'region' is the broad area: Tel Aviv / Center / Sharon / Haifa / North / South / Jerusalem)
+    Examples: top companies, seniority breakdown, most common roles, jobs by region
     """
-    ALLOWED_COLUMNS = {"role", "seniority", "location", "company", "yearsexperience"}
+    ALLOWED_COLUMNS = {"role", "seniority", "location", "region", "company", "yearsexperience"}
     col_lower = column.lower()
 
     if col_lower not in ALLOWED_COLUMNS:
@@ -232,19 +233,19 @@ def search_jobs_by_criteria(
 ):
     """Filter jobs by specific fields.
     - role: e.g. 'server', 'react developer'
-    - location: e.g. 'Tel Aviv', 'remote' — ONLY use when the user explicitly names a city, country, or region (e.g. 'in Tel Aviv', 'remote jobs'). Do NOT use for company names.
+    - location: e.g. 'Tel Aviv', 'Center', 'remote' — ONLY use when the user explicitly names a city or region (e.g. 'in Tel Aviv', 'up north', 'remote jobs'). Matches both the city and the broad region. Do NOT use for company names.
     - company: e.g. 'Google', 'startup' — use when the user names a company or employer (e.g. 'at Google', 'jobs at Abra'). When in doubt between location and company, prefer company.
     - max_experience: maximum years of experience required
     """
-    sql = "SELECT id, title, company, role, location, url FROM jobs"
+    sql = "SELECT id, title, company, role, location, region, url FROM jobs"
     conditions, params = [], []
 
     if role:
         conditions.append("LOWER(role) LIKE LOWER(%s)")
         params.append(f"%{role}%")
     if location:
-        conditions.append("LOWER(location) LIKE LOWER(%s)")
-        params.append(f"%{location}%")
+        conditions.append("(LOWER(region) LIKE LOWER(%s) OR LOWER(location) LIKE LOWER(%s))")
+        params += [f"%{location}%", f"%{location}%"]
     if company:
         conditions.append("LOWER(company) LIKE LOWER(%s)")
         params.append(f"%{company}%")

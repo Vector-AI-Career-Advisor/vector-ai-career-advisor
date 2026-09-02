@@ -59,16 +59,12 @@
 }
 
 .job-meta-top {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; align-items: center;
   margin-bottom: 0.3rem;
 }
 .job-company {
   font-size: 0.8rem; font-weight: 500; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.07em;
-}
-.job-posted {
-  font-family: var(--font-mono); font-size: 0.72rem;
-  color: var(--muted); opacity: 0.7;
 }
 
 .job-title {
@@ -80,20 +76,28 @@
 
 .job-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
 
-/* Seniority · location · experience — plain text, no bubbles */
+/* Seniority · location · experience · posted — plain text, no bubbles.
+   Wraps to a second line when it can't fit on one. Reserves room for that
+   second line even when unused, so the skills row below always sits at the
+   same height. */
 .job-meta-line {
-  display: flex; flex-wrap: nowrap; align-items: center;
+  display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start;
+  row-gap: 0.2rem;
+  line-height: 1.4;
+  min-height: 2.3rem;   /* 2 lines × 1.4 + row-gap */
   margin-bottom: 0.75rem;
   font-size: 0.75rem; color: var(--muted);
-  overflow: hidden; white-space: nowrap;
 }
 .job-meta-item {
   display: inline-flex; align-items: center; gap: 0.25rem;
   text-transform: capitalize;
+  white-space: nowrap;
 }
 .job-meta-item:not(:last-child)::after {
   content: "·"; margin: 0 0.45rem; opacity: 0.6;
 }
+/* "2w ago" / "Yesterday" — don't force per-word capitalisation */
+.job-meta-item.job-posted { text-transform: none; }
 
 .tag {
   display: inline-flex; align-items: center; gap: 0.25rem;
@@ -111,7 +115,6 @@
 
 .job-skills {
   display: flex; flex-wrap: wrap; gap: 0.35rem;
-  margin-top: auto;
   /* one row only — extra chips wrap out of view instead of being clipped mid-bubble */
   max-height: 1.6rem; overflow: hidden;
 }

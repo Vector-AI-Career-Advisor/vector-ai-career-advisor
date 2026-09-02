@@ -51,7 +51,7 @@ Job Title: {job.get('title', '')}
 Role: {job.get('role', '')}
 Seniority: {job.get('seniority', '')}
 Company: {job.get('company', '')}
-Location: {job.get('location', '')}
+Location: {_join([job.get('location'), job.get('region')])}
 
 Required Skills: {_join(job.get('skills_must', []))}
 Nice Skills: {_join(job.get('skills_nice', []))}
@@ -65,6 +65,9 @@ Description:
 
 def _field_text(job: dict, field: str) -> str:
     """Return a clean string for a single job field."""
+    if field == "location":
+        parts = [job.get("location"), job.get("region")]
+        return ", ".join(str(p).strip() for p in parts if p)
     val = job.get(field, "")
     if isinstance(val, list):
         return ", ".join(str(v) for v in val if v)

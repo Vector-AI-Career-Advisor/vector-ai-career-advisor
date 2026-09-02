@@ -9,6 +9,7 @@ import {
 import type { ResumeInfo, ResumeListItem, ResumeDetail } from '../api/resumes'
 import {
   getProfileSummary, type ProfileSummary,
+  updateBasicInfo, updateCareerStage,
   getJobCore, updateJobCore, type JobCore,
   getJobPreferences, updateJobPreferences, type JobPreferences,
   getEducation, addEducation, updateEducation, deleteEducation,
@@ -17,9 +18,15 @@ import {
 } from '../api/profile'
 import {
   ROLE_OPTIONS, LOCATION_OPTIONS, SENIORITIES, EDUCATION_LEVELS, EXPERIENCE_OPTIONS,
-  humanizeCareerStage,
+  CAREER_STAGE_OPTIONS, humanizeCareerStage,
 } from '../constants'
 import './ProfilePage.css'
+
+type SummaryUser = ProfileSummary['user']
+
+// Stable identity for the "no summary loaded yet" case, so effects keyed on the
+// user object don't re-fire on every render.
+const EMPTY_USER: SummaryUser = {}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -89,6 +96,12 @@ export default function ProfilePage() {
   }, [])
 
   useEffect(() => { fetchResume() }, [fetchResume])
+
+  // Re-read just the summary after an inline edit — no résumé spinner.
+  const reloadSummary = useCallback(async () => {
+    const summary = await getProfileSummary().catch(() => null)
+    if (summary) setProfileSummary(summary)
+  }, [])
 
   // ── Load education + work experience (editable) ─────────────────────────
   const loadEduExp = useCallback(async () => {
@@ -227,7 +240,7 @@ export default function ProfilePage() {
   const fmt = (d?: string) =>
     d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
 
-  const user = profileSummary?.user ?? {}
+  const user = profileSummary?.user ?? EMPTY_USER
   const prefs = profileSummary?.work_preferences ?? {}
 
   return (
@@ -261,24 +274,7 @@ export default function ProfilePage() {
       <section className="profile-section">
         <SectionHeader title="Profile" badge="Summary" active />
         <div className="profile-card profile-summary-card">
-          <div className="summary-grid">
-            <div>
-              <div className="summary-label">Name</div>
-              <div className="summary-value">{user.first_name || user.last_name ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() : 'Not filled yet'}</div>
-            </div>
-            <div>
-              <div className="summary-label">Location</div>
-              <div className="summary-value">{user.city || 'Not set'}</div>
-            </div>
-            <div>
-              <div className="summary-label">Career stage</div>
-              <div className="summary-value">{humanizeCareerStage(user.career_stage)}</div>
-            </div>
-            <div>
-              <div className="summary-label">Experience</div>
-              <div className="summary-value">{user.years_experience != null ? `${user.years_experience} yrs` : 'Not set'}</div>
-            </div>
-          </div>
+          <BasicsSection user={user} reload={reloadSummary} />
 
           <EducationSection rows={educationList} reload={loadEduExp} />
 
@@ -527,6 +523,187 @@ function SectionHeader({ title, badge, active }: { title: string; badge: string;
     <div className="stats-section-header" style={{ marginBottom: '1rem' }}>
       <span className="stats-section-title">{title}</span>
       <span className={`stats-section-badge ${active ? 'badge-active' : ''}`}>{badge}</span>
+    </div>
+  )
+}
+
+// ── Editable basics (name / location / career stage / experience) ──────────
+
+interface BasicsForm {
+  first_name: string
+  last_name: string
+  city: string
+  career_stage: string
+  years_experience: number | null
+}
+
+function BasicsSection({ user, reload }: { user: SummaryUser; reload: () => Promise<void> }) {
+  const toForm = (u: SummaryUser): BasicsForm => ({
+    first_name: u.first_name ?? '',
+    last_name: u.last_name ?? '',
+    city: u.city ?? '',
+    career_stage: u.career_stage ?? '',
+    years_experience: u.years_experience ?? null,
+  })
+
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState<BasicsForm>(() => toForm(user))
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  // Adopt freshly loaded values, but never clobber an edit in progress.
+  useEffect(() => {
+    if (!editing) setForm(toForm(user))
+  }, [user])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fullName = user.first_name || user.last_name
+    ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim()
+    : 'Not filled yet'
+
+  const save = async () => {
+    if (busy) return
+    const first = form.first_name.trim()
+    const last = form.last_name.trim()
+    const city = form.city.trim()
+
+    // The two endpoints back different columns — only call the ones that moved.
+    const basicDirty =
+      first !== (user.first_name ?? '') ||
+      last !== (user.last_name ?? '') ||
+      city !== (user.city ?? '')
+    const careerDirty =
+      form.career_stage !== (user.career_stage ?? '') ||
+      form.years_experience !== (user.years_experience ?? null)
+
+    if (basicDirty && (!first || !last)) {
+      setMsg({ type: 'err', text: 'First and last name are both required.' })
+      return
+    }
+    if (careerDirty && !form.career_stage) {
+      setMsg({ type: 'err', text: 'Pick a career stage.' })
+      return
+    }
+    if (!basicDirty && !careerDirty) {
+      setEditing(false)
+      setMsg(null)
+      return
+    }
+
+    setBusy(true)
+    setMsg(null)
+    try {
+      if (basicDirty) {
+        // phone isn't edited here, but the endpoint rewrites the whole row —
+        // pass the current value through so it isn't nulled out.
+        await updateBasicInfo({
+          first_name: first,
+          last_name: last,
+          email: user.email,
+          phone: user.phone,
+          city: city || undefined,
+        })
+      }
+      if (careerDirty) {
+        await updateCareerStage({
+          career_stage: form.career_stage,
+          years_experience: form.years_experience ?? 0,
+        })
+      }
+      setEditing(false)
+      await reload()
+      setMsg({ type: 'ok', text: 'Profile updated.' })
+    } catch {
+      setMsg({ type: 'err', text: 'Could not save. Try again.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const cancel = () => {
+    setForm(toForm(user))
+    setEditing(false)
+    setMsg(null)
+  }
+
+  return (
+    <div className="summary-section">
+      <div className="mini-head">
+        <div className="mini-title">Basics</div>
+        {!editing && <button className="mini-add" onClick={() => { setMsg(null); setEditing(true) }}>Edit</button>}
+      </div>
+
+      {editing ? (
+        <div className="entry-edit">
+          <div className="entry-edit-grid basics-grid">
+            <label className="field">
+              <span className="field-label">First name</span>
+              <input className="entry-input" value={form.first_name} placeholder="Ada"
+                onChange={e => setForm({ ...form, first_name: e.target.value })} />
+            </label>
+            <label className="field">
+              <span className="field-label">Last name</span>
+              <input className="entry-input" value={form.last_name} placeholder="Lovelace"
+                onChange={e => setForm({ ...form, last_name: e.target.value })} />
+            </label>
+            <label className="field">
+              <span className="field-label">Location</span>
+              <input className="entry-input" value={form.city} placeholder="Tel Aviv"
+                onChange={e => setForm({ ...form, city: e.target.value })} />
+            </label>
+            <label className="field field-stage">
+              <span className="field-label">Career stage</span>
+              <select className="entry-input" value={form.career_stage}
+                onChange={e => setForm({ ...form, career_stage: e.target.value })}>
+                <option value="">Select…</option>
+                {CAREER_STAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">Years of experience</span>
+              {/* text + digit filter rather than type="number": no spinner
+                  arrows, and no way to type "e"/"+"/"-" either */}
+              <input className="entry-input" type="text" inputMode="numeric"
+                value={form.years_experience ?? ''} placeholder="0" maxLength={2}
+                onChange={e => {
+                  const digits = e.target.value.replace(/\D/g, '')
+                  setForm({
+                    ...form,
+                    years_experience: digits === '' ? null : Math.min(Number(digits), 60),
+                  })
+                }} />
+            </label>
+          </div>
+          <div className="entry-edit-actions">
+            <button className="btn-replace" onClick={cancel} disabled={busy}>Cancel</button>
+            <button className="btn-modal-save" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+          </div>
+        </div>
+      ) : (
+        <div className="summary-grid">
+          <div>
+            <div className="summary-label">Name</div>
+            <div className="summary-value">{fullName}</div>
+          </div>
+          <div>
+            <div className="summary-label">Location</div>
+            <div className="summary-value">{user.city || 'Not set'}</div>
+          </div>
+          <div>
+            <div className="summary-label">Career stage</div>
+            <div className="summary-value">{humanizeCareerStage(user.career_stage)}</div>
+          </div>
+          <div>
+            <div className="summary-label">Experience</div>
+            <div className="summary-value">{user.years_experience != null ? `${user.years_experience} yrs` : 'Not set'}</div>
+          </div>
+        </div>
+      )}
+
+      {msg && (
+        <div className={`upload-msg upload-msg-${msg.type}`}>
+          {msg.type === 'ok' ? <CheckIcon /> : <WarnIcon />}{msg.text}
+        </div>
+      )}
     </div>
   )
 }

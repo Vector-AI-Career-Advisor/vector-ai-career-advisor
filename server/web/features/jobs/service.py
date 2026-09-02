@@ -12,6 +12,7 @@ def list_jobs(
     skills: Optional[List[str]] = None,
     limit: int = repository.LIMIT,
     offset: int = 0,
+    years_experience_max: Optional[int] = None,
 ) -> dict:
     return repository.list_jobs(
         keyword,
@@ -23,6 +24,7 @@ def list_jobs(
         skills,
         limit,
         offset,
+        years_experience_max=years_experience_max,
     )
 
 

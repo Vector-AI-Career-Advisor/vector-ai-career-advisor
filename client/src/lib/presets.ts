@@ -10,6 +10,7 @@ export interface FilterPreset {
   posted_date?: string
   roles?: string[]
   years_experience_min?: number
+  years_experience_max?: number
   skills?: string[]
   createdAt: string
 }

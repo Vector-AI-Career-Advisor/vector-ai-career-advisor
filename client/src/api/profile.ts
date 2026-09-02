@@ -3,7 +3,7 @@ import api from './client'
 export interface BasicInfo {
   first_name: string
   last_name: string
-  email: string
+  email?: string          // ignored by the server; it never reassigns the login email
   phone?: string
   city?: string
 }

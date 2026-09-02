@@ -15,6 +15,7 @@ def list_jobs(
     skills: Optional[List[str]] = None,
     limit: int = LIMIT,
     offset: int = 0,
+    years_experience_max: Optional[int] = None,
 ) -> dict:
     conn = get_connection()
     try:
@@ -36,8 +37,10 @@ def list_jobs(
                 filters.append("seniority ILIKE %s")
                 params.append(f"%{seniority}%")
         if location:
-            filters.append("location ILIKE %s")
-            params.append(f"%{location}%")
+            # the sidebar sends a region name ("Center"); older callers may send
+            # a city — match either column.
+            filters.append("(region ILIKE %s OR location ILIKE %s)")
+            params += [f"%{location}%", f"%{location}%"]
         
         # Posted date filter
         if posted_date:
@@ -69,6 +72,9 @@ def list_jobs(
         if years_experience_min is not None:
             filters.append("yearsexperience >= %s")
             params.append(years_experience_min)
+        if years_experience_max is not None:
+            filters.append("yearsexperience <= %s")
+            params.append(years_experience_max)
         
         # Skills filter (check if any of the skills are in skills_must or skills_nice)
         if skills and len(skills) > 0:
@@ -87,7 +93,7 @@ def list_jobs(
         with conn.cursor() as cur:
             cur.execute(f"""
                 SELECT COUNT(*) OVER() AS total_count,
-                       j.id, j.title, j.role, j.seniority, j.company, j.location, j.url,
+                       j.id, j.title, j.role, j.seniority, j.company, j.location, j.region, j.url,
                        j.description, j.skills_must, j.skills_nice, j.yearsexperience,
                        j.past_experience, j.keyword, j.source, j.posted_at, j.scraped_at,
                        cl.logo_path
@@ -123,7 +129,7 @@ def get_job(job_id: str) -> Optional[dict]:
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT j.id, j.title, j.role, j.seniority, j.company, j.location, j.url,
+                SELECT j.id, j.title, j.role, j.seniority, j.company, j.location, j.region, j.url,
                        j.description, j.skills_must, j.skills_nice, j.yearsexperience,
                        j.past_experience, j.keyword, j.source, j.posted_at, j.scraped_at,
                        cl.logo_path

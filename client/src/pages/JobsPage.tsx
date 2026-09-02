@@ -5,6 +5,7 @@ import { fetchJobs, Job, JobFilters } from '../api/jobs'
 import { useAuth } from '../hooks/useAuth'
 import JobCard from '../components/JobCard'
 import JobDrawer from '../components/JobDrawer'
+import RangeSlider from '../components/RangeSlider'
 import AgentChat from '../components/AgentChat'
 import StatsPage from './StatsPage'
 import ProfilePage from './ProfilePage'
@@ -22,15 +23,10 @@ const POSTED_DATE_OPTIONS = [
   { value: 'last_2w', label: 'Last 2 weeks' },
   { value: 'last_month', label: 'Last month' },
 ]
-const YEARS_OF_EXP_OPTIONS = [
-  { value: '', label: 'Any experience' },
-  { value: 0, label: '0 years' },
-  { value: 1, label: '1+ years' },
-  { value: 2, label: '2+ years' },
-  { value: 3, label: '3+ years' },
-  { value: 5, label: '5+ years' },
-  { value: 10, label: '10+ years' },
-]
+// Years-of-experience range slider bounds. A range spanning the full extent is
+// treated as "no filter" so jobs with an unspecified experience level still show.
+const EXP_MIN = 0
+const EXP_MAX = 15
 const LIMIT = 50
 
 type Tab = 'jobs' | 'stats' | 'applications' | 'profile'
@@ -55,7 +51,8 @@ export default function JobsPage() {
 
   const [postedDate, setPostedDate] = useState('')
   const [roles, setRoles] = useState<string[]>([])
-  const [yearsExp, setYearsExp] = useState<number | ''>('')
+  const [expRange, setExpRange] = useState<[number, number]>([EXP_MIN, EXP_MAX])
+  const [debouncedExp, setDebouncedExp] = useState<[number, number]>([EXP_MIN, EXP_MAX])
   const [locations, setLocations] = useState<string[]>([])
   const [skills, setSkills] = useState<string[]>([])
   const [skillInput, setSkillInput] = useState('')
@@ -93,6 +90,12 @@ export default function JobsPage() {
     return () => clearTimeout(t)
   }, [keyword])
 
+  // Debounce the experience slider so dragging doesn't fire a request per step
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedExp(expRange), 300)
+    return () => clearTimeout(t)
+  }, [expRange])
+
   // Keep the saved-filter list in sync whenever we switch tabs
   useEffect(() => { setPresets(loadPresets()) }, [activeTab])
 
@@ -113,7 +116,8 @@ export default function JobsPage() {
         location: locations.length > 0 ? locations[0] : undefined,
         posted_date: postedDate || undefined,
         roles: roles.length > 0 ? roles : undefined,
-        years_experience_min: yearsExp !== '' ? yearsExp : undefined,
+        years_experience_min: debouncedExp[0] > EXP_MIN ? debouncedExp[0] : undefined,
+        years_experience_max: debouncedExp[1] < EXP_MAX ? debouncedExp[1] : undefined,
         skills: skills.length > 0 ? skills : undefined,
         limit: LIMIT,
         offset: 0,
@@ -127,7 +131,7 @@ export default function JobsPage() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedKeyword, seniorities, locations, postedDate, roles, yearsExp, skills])
+  }, [debouncedKeyword, seniorities, locations, postedDate, roles, debouncedExp, skills])
 
   useEffect(() => { load() }, [load])
 
@@ -141,7 +145,8 @@ export default function JobsPage() {
         location: locations.length > 0 ? locations[0] : undefined,
         posted_date: postedDate || undefined,
         roles: roles.length > 0 ? roles : undefined,
-        years_experience_min: yearsExp !== '' ? yearsExp : undefined,
+        years_experience_min: debouncedExp[0] > EXP_MIN ? debouncedExp[0] : undefined,
+        years_experience_max: debouncedExp[1] < EXP_MAX ? debouncedExp[1] : undefined,
         skills: skills.length > 0 ? skills : undefined,
         limit: LIMIT,
         offset,
@@ -154,7 +159,7 @@ export default function JobsPage() {
     } catch { /* silent fail */ } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, offset, debouncedKeyword, seniorities, locations, postedDate, roles, yearsExp, skills])
+  }, [loadingMore, hasMore, offset, debouncedKeyword, seniorities, locations, postedDate, roles, debouncedExp, skills])
 
   useEffect(() => {
     const sentinel = sentinelRef.current
@@ -178,13 +183,14 @@ export default function JobsPage() {
     setSeniorities([])
     setPostedDate('')
     setRoles([])
-    setYearsExp('')
+    setExpRange([EXP_MIN, EXP_MAX])
     setLocations([])
     setSkills([])
     setSkillInput('')
   }
 
-  const hasFilters = keyword || seniorities.length > 0 || postedDate || roles.length > 0 || yearsExp !== '' || locations.length > 0 || skills.length > 0
+  const expFiltered = expRange[0] > EXP_MIN || expRange[1] < EXP_MAX
+  const hasFilters = keyword || seniorities.length > 0 || postedDate || roles.length > 0 || expFiltered || locations.length > 0 || skills.length > 0
 
   // Apply a saved preset from ProfilePage
   const handleApplyFilter = (filters: JobFilters) => {
@@ -193,7 +199,9 @@ export default function JobsPage() {
     if (filters.location  !== undefined) setLocations(filters.location ? [filters.location] : [])
     if (filters.posted_date !== undefined) setPostedDate(filters.posted_date ?? '')
     if (filters.roles !== undefined) setRoles(filters.roles ?? [])
-    if (filters.years_experience_min !== undefined) setYearsExp(filters.years_experience_min ?? '')
+    if (filters.years_experience_min !== undefined || filters.years_experience_max !== undefined) {
+      setExpRange([filters.years_experience_min ?? EXP_MIN, filters.years_experience_max ?? EXP_MAX])
+    }
     if (filters.skills !== undefined) setSkills(filters.skills ?? [])
     setActiveTab('jobs')
   }
@@ -208,7 +216,8 @@ export default function JobsPage() {
       location: locations.length > 0 ? locations[0] : undefined,
       posted_date: postedDate || undefined,
       roles: roles.length > 0 ? roles : undefined,
-      years_experience_min: yearsExp !== '' ? yearsExp : undefined,
+      years_experience_min: expRange[0] > EXP_MIN ? expRange[0] : undefined,
+      years_experience_max: expRange[1] < EXP_MAX ? expRange[1] : undefined,
       skills: skills.length > 0 ? skills : undefined,
     })
     setPresets(loadPresets())
@@ -492,18 +501,21 @@ export default function JobsPage() {
                 </div>
 
                 <div className="filter-group">
-                  <label className="filter-label">Years of Experience</label>
-                  <select
-                    value={yearsExp}
-                    onChange={e => setYearsExp(e.target.value === '' ? '' : parseInt(e.target.value))}
-                    className="filter-input"
-                  >
-                    {YEARS_OF_EXP_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="filter-label">
+                    Years of Experience
+                    <span className="filter-label-value">
+                      {expFiltered
+                        ? `${expRange[0]}–${expRange[1] >= EXP_MAX ? `${EXP_MAX}+` : expRange[1]} yrs`
+                        : 'Any'}
+                    </span>
+                  </label>
+                  <RangeSlider
+                    min={EXP_MIN}
+                    max={EXP_MAX}
+                    value={expRange}
+                    onChange={setExpRange}
+                    format={n => (n >= EXP_MAX ? `${EXP_MAX}+` : String(n))}
+                  />
                 </div>
 
                 <div className="filter-group">
@@ -558,6 +570,7 @@ export default function JobsPage() {
                               posted_date: p.posted_date,
                               roles: p.roles,
                               years_experience_min: p.years_experience_min,
+                              years_experience_max: p.years_experience_max,
                               skills: p.skills,
                             })}
                           >

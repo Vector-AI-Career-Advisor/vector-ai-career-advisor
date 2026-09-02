@@ -80,8 +80,8 @@ def build_chroma_metadata(job: dict) -> dict:
     Lists are joined as comma-separated strings.
     """
     scalar_fields = ("id", "title", "role", "seniority", "company",
-                     "location", "url", "yearsexperience", "keyword", "source",
-                     "company_slug")
+                     "location", "region", "url", "yearsexperience", "keyword",
+                     "source", "company_slug")
     list_fields   = ("skills_must", "skills_nice", "past_experience")
 
     meta = {}
