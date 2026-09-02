@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Optional, List, Dict
 from fastapi import HTTPException
@@ -350,10 +351,13 @@ def update_preferences(user_id: int, data: PreferencesRequest) -> dict:
     """Update or create user preferences."""
     conn = get_connection()
     try:
+        work_preferences = json.dumps(data.work_preferences) if data.work_preferences is not None else None
+        interests = json.dumps(data.interests) if data.interests is not None else None
+
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO user_preferences (user_id, github_url, portfolio_url, work_preferences, interests)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s::jsonb, %s::jsonb)
                 ON CONFLICT (user_id) DO UPDATE SET
                     github_url = COALESCE(EXCLUDED.github_url, user_preferences.github_url),
                     portfolio_url = COALESCE(EXCLUDED.portfolio_url, user_preferences.portfolio_url),
@@ -361,18 +365,17 @@ def update_preferences(user_id: int, data: PreferencesRequest) -> dict:
                     interests = COALESCE(EXCLUDED.interests, user_preferences.interests),
                     updated_at = NOW()
                 RETURNING id, user_id, github_url, portfolio_url, work_preferences, interests, created_at, updated_at;
-            """, (user_id, data.github_url, data.portfolio_url, data.work_preferences, data.interests))
+            """, (user_id, data.github_url, data.portfolio_url, work_preferences, interests))
             row = cur.fetchone()
-        
+
         if row is None:
-            # If nothing was returned, fetch the record
             cur.execute("""
                 SELECT id, user_id, github_url, portfolio_url, work_preferences, interests, created_at, updated_at
                 FROM user_preferences
                 WHERE user_id = %s;
             """, (user_id,))
             row = cur.fetchone()
-        
+
         cols = [desc[0] for desc in cur.description]
         conn.commit()
         log.info("Updated preferences for user %d", user_id)
@@ -400,6 +403,107 @@ def get_profile(user_id: int) -> Optional[dict]:
         return dict(zip(cols, row))
     finally:
         conn.close()
+
+
+def get_profile_summary(user_id: int) -> dict:
+    """Return the current user profile summary for the profile page and job filters."""
+    profile = get_profile(user_id) or {}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT degree_type, field_of_study, school, graduation_year
+                FROM user_educations
+                WHERE user_id = %s
+                ORDER BY graduation_year DESC NULLS LAST, created_at DESC
+                LIMIT 1;
+            """, (user_id,))
+            education = cur.fetchone()
+
+            cur.execute("""
+                SELECT skill
+                FROM user_skills
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 12;
+            """, (user_id,))
+            skills = [row[0] for row in cur.fetchall()]
+
+            cur.execute("""
+                SELECT skill
+                FROM user_soft_skills
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 10;
+            """, (user_id,))
+            soft_skills = [row[0] for row in cur.fetchall()]
+
+            cur.execute("""
+                SELECT position, company, start_date, end_date
+                FROM user_work_experience
+                WHERE user_id = %s
+                ORDER BY start_date DESC NULLS LAST, created_at DESC
+                LIMIT 3;
+            """, (user_id,))
+            work_experience = [
+                {
+                    "position": row[0],
+                    "company": row[1],
+                    "start_date": row[2],
+                    "end_date": row[3],
+                }
+                for row in cur.fetchall()
+            ]
+
+            cur.execute("""
+                SELECT work_preferences
+                FROM user_preferences
+                WHERE user_id = %s;
+            """, (user_id,))
+            prefs_row = cur.fetchone()
+            work_preferences = prefs_row[0] if prefs_row and prefs_row[0] else {}
+    finally:
+        conn.close()
+
+    education_summary = {}
+    if education:
+        education_summary = {
+            "degree_type": education[0],
+            "field_of_study": education[1],
+            "school": education[2],
+            "graduation_year": education[3],
+        }
+
+    derived_filters = {
+        "keyword": " ".join(skills[:3]),
+        "skills": skills[:8],
+        "location": profile.get("city"),
+        "years_experience_min": profile.get("years_experience"),
+        "seniority": profile.get("career_stage"),
+        "work_preferences": work_preferences,
+    }
+
+    return {
+        "user": {
+            "id": profile.get("id"),
+            "email": profile.get("email"),
+            "first_name": profile.get("first_name"),
+            "last_name": profile.get("last_name"),
+            "phone": profile.get("phone"),
+            "city": profile.get("city"),
+            "years_experience": profile.get("years_experience"),
+            "career_stage": profile.get("career_stage"),
+            "created_at": profile.get("created_at"),
+            "updated_at": profile.get("updated_at"),
+        },
+        "education": education_summary,
+        "skills": skills,
+        "soft_skills": soft_skills,
+        "work_experience": work_experience,
+        "work_preferences": work_preferences,
+        "job_filters": derived_filters,
+    }
 
 
 def check_onboarding_complete(user_id: int) -> bool:

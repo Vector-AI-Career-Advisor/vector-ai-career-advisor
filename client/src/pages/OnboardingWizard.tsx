@@ -998,7 +998,7 @@ export default function OnboardingWizard() {
             </div>
           </div>
 
-          <button className="btn-primary" onClick={finishOnboarding} disabled={loading} style={{ width: '100%', marginTop: '2rem' }}>
+          <button type="button" className="btn-primary" onClick={() => { void finishOnboarding() }} disabled={loading} style={{ width: '100%', marginTop: '2rem' }}>
             {loading ? 'Setting up...' : 'Go to Job Board'}
           </button>
         </div>

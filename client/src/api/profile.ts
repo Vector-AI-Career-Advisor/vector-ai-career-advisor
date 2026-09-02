@@ -43,6 +43,44 @@ export interface Preferences {
   interests?: string[]
 }
 
+export interface ProfileSummary {
+  user: {
+    id?: number
+    email?: string
+    first_name?: string
+    last_name?: string
+    phone?: string
+    city?: string
+    years_experience?: number | null
+    career_stage?: string | null
+    created_at?: string
+    updated_at?: string
+  }
+  education: {
+    degree_type?: string | null
+    field_of_study?: string | null
+    school?: string | null
+    graduation_year?: number | null
+  }
+  skills: string[]
+  soft_skills: string[]
+  work_experience: Array<{
+    position?: string | null
+    company?: string | null
+    start_date?: string | null
+    end_date?: string | null
+  }>
+  work_preferences?: Record<string, boolean>
+  job_filters: {
+    keyword?: string
+    skills?: string[]
+    location?: string | null
+    years_experience_min?: number | null
+    seniority?: string | null
+    work_preferences?: Record<string, boolean>
+  }
+}
+
 export const updateBasicInfo = async (data: BasicInfo): Promise<any> => {
   const { data: response } = await api.post('/profile/basic-info', data)
   return response
@@ -105,6 +143,11 @@ export const updatePreferences = async (data: Preferences): Promise<any> => {
 
 export const getProfile = async (): Promise<any> => {
   const { data } = await api.get('/profile/me')
+  return data
+}
+
+export const getProfileSummary = async (): Promise<ProfileSummary> => {
+  const { data } = await api.get('/profile/summary')
   return data
 }
 

@@ -6,6 +6,8 @@ from xml.etree import ElementTree as ET
 from fastapi import HTTPException, UploadFile
 import pypdf
 from features.resumes import repository
+from features.resumes.profile_extractor import extract_profile_from_resume
+from server.db.postgres import get_connection
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +46,78 @@ async def upload_resume(user_id: int, file: UploadFile) -> dict:
         raise HTTPException(status_code=400, detail=f"Could not extract text from {kind}")
 
     repository.save_resume(user_id, file.filename, text)
+
+    try:
+        extracted = extract_profile_from_resume(text)
+        conn = get_connection()
+        with conn.cursor() as cur:
+            if extracted.get("first_name") or extracted.get("last_name"):
+                cur.execute(
+                    "UPDATE users SET first_name = COALESCE(%s, first_name), last_name = COALESCE(%s, last_name), phone = COALESCE(%s, phone), city = COALESCE(%s, city), years_experience = COALESCE(CAST(%s AS INTEGER), years_experience), career_stage = COALESCE(%s, career_stage), updated_at = NOW() WHERE id = %s",
+                    (
+                        extracted.get("first_name"),
+                        extracted.get("last_name"),
+                        extracted.get("phone"),
+                        extracted.get("city"),
+                        extracted.get("years_experience"),
+                        extracted.get("career_stage"),
+                        user_id,
+                    ),
+                )
+
+            edu = extracted.get("education") or {}
+            if edu.get("degree_type") or edu.get("field_of_study") or edu.get("school"):
+                cur.execute(
+                    """
+                    INSERT INTO user_educations (user_id, degree_type, field_of_study, school, graduation_year)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (
+                        user_id,
+                        edu.get("degree_type"),
+                        edu.get("field_of_study"),
+                        edu.get("school"),
+                        edu.get("graduation_year") or None,
+                    ),
+                )
+
+            for skill in extracted.get("skills") or []:
+                cur.execute(
+                    "INSERT INTO user_skills (user_id, skill, category) VALUES (%s, %s, %s) ON CONFLICT (user_id, skill) DO NOTHING",
+                    (user_id, skill, "resume"),
+                )
+
+            for skill in extracted.get("soft_skills") or []:
+                cur.execute(
+                    "INSERT INTO user_soft_skills (user_id, skill) VALUES (%s, %s) ON CONFLICT (user_id, skill) DO NOTHING",
+                    (user_id, skill),
+                )
+
+            for exp in extracted.get("work_experience") or []:
+                cur.execute(
+                    """
+                    INSERT INTO user_work_experience (user_id, position, company, start_date, end_date)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (
+                        user_id,
+                        exp.get("position"),
+                        exp.get("company"),
+                        exp.get("start_date"),
+                        exp.get("end_date"),
+                    ),
+                )
+        conn.commit()
+    except Exception as exc:
+        log.warning("Resume-derived profile extraction failed for user %s: %s", user_id, exc)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
     log.info("Resume uploaded for user %s: %s", user_id, file.filename)
     return {"message": "Resume uploaded successfully", "filename": file.filename}
 

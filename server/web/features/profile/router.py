@@ -131,6 +131,14 @@ def get_profile(user_id: str = Depends(get_current_user)):
     return profile
 
 
+@router.get("/summary")
+def get_profile_summary(user_id: str = Depends(get_current_user)):
+    summary = service.get_profile_summary(int(user_id))
+    if not summary.get("user"):
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return summary
+
+
 @router.get("/onboarding-status", response_model=OnboardingStatusResponse)
 def get_onboarding_status(user_id: str = Depends(get_current_user)):
     """Check if user has completed onboarding."""
