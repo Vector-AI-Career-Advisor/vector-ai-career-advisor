@@ -20,8 +20,8 @@ input, textarea { font-family: inherit; }
 
   /* text */
   --text:         #f0f0fa;
-  --muted:        #6b6b82;
-  --muted-hi:     #9898b4;
+  --muted:        #9292ac;
+  --muted-hi:     #b6b6cc;
 
   /* brand palette */
   --accent:       #7c5af7;   /* violet */

@@ -129,7 +129,7 @@
   overflow: hidden; text-overflow: ellipsis; max-width: 160px;
   display: block; transition: color 0.15s;
 }
-.company-name:hover { color: var(--accent2); }
+.company-name:hover { color: var(--text); }
 
 .role-cell { font-weight: 500; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .muted-cell { color: var(--muted); font-size: 0.82rem; }

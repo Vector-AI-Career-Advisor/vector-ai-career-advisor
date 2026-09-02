@@ -132,8 +132,12 @@
   padding: 0.3rem 0.7rem; border-radius: 6px;
   font-family: var(--font-mono); font-size: 0.78rem; font-weight: 500;
 }
-.skill-chip-drawer.must { background: var(--chip-bg); border: 1px solid var(--chip-border); color: var(--chip-fg); }
-.skill-chip-drawer.nice { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+.skill-chip-drawer.must,
+.skill-chip-drawer.nice {
+  background: rgba(124, 90, 247, 0.1);
+  border: 1px solid rgba(124, 90, 247, 0.24);
+  color: var(--text);
+}
 
 .drawer-desc { color: var(--muted); font-size: 0.88rem; line-height: 1.75; white-space: pre-wrap; }
 

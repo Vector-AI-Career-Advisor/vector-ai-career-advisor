@@ -99,7 +99,7 @@
 .user-badge {
   display: flex; align-items: center; gap: 0.4rem;
   font-size: 0.72rem; font-weight: 600;
-  color: var(--green);
+  color: var(--text);
   background: rgba(52,211,153,0.1);
   border: 1px solid rgba(52,211,153,0.2);
   border-radius: 20px;
@@ -117,7 +117,7 @@
 .badge-active {
   background: rgba(52,211,153,0.1) !important;
   border-color: rgba(52,211,153,0.2) !important;
-  color: var(--green) !important;
+  color: var(--text) !important;
 }
 
 /* Resume info */
@@ -148,7 +148,7 @@
 .resume-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
 
 .btn-replace {
-  font-size: 0.78rem; font-weight: 600; color: var(--accent2);
+  font-size: 0.78rem; font-weight: 600; color: var(--text);
   background: rgba(124,90,247,0.1); border: 1px solid rgba(124,90,247,0.25);
   border-radius: 7px; padding: 0.35rem 0.8rem; transition: all 0.15s; cursor: pointer;
 }
@@ -193,7 +193,7 @@
   margin-top: 0.85rem; font-size: 0.8rem; font-weight: 500;
   border-radius: 7px; padding: 0.55rem 0.85rem;
 }
-.upload-msg-ok { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); color: var(--green); }
+.upload-msg-ok { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); color: var(--text); }
 .upload-msg-err { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.2); color: var(--red); }
 
 /* Inline rename input (résumé list) */
