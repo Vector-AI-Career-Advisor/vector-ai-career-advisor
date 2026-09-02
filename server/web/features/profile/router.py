@@ -36,6 +36,16 @@ def get_education(user_id: str = Depends(get_current_user)):
     return service.get_education(int(user_id))
 
 
+@router.put("/education/{education_id}")
+def update_education(education_id: int, data: EducationRequest, user_id: str = Depends(get_current_user)):
+    return service.update_education(int(user_id), education_id, data)
+
+
+@router.delete("/education/{education_id}")
+def delete_education(education_id: int, user_id: str = Depends(get_current_user)):
+    return {"success": service.delete_education(int(user_id), education_id)}
+
+
 # ── Technical Skills ────────────────────────────────────────────────────────
 
 @router.post("/skills")
@@ -88,6 +98,16 @@ def add_work_experience(data: WorkExperienceRequest, user_id: str = Depends(get_
 @router.get("/work-experience")
 def get_work_experience(user_id: str = Depends(get_current_user)):
     return service.get_work_experience(int(user_id))
+
+
+@router.put("/work-experience/{experience_id}")
+def update_work_experience(experience_id: int, data: WorkExperienceRequest, user_id: str = Depends(get_current_user)):
+    return service.update_work_experience(int(user_id), experience_id, data)
+
+
+@router.delete("/work-experience/{experience_id}")
+def delete_work_experience(experience_id: int, user_id: str = Depends(get_current_user)):
+    return {"success": service.delete_work_experience(int(user_id), experience_id)}
 
 
 # ── Certifications ───────────────────────────────────────────────────────────

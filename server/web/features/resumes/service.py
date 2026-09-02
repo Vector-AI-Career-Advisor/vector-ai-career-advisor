@@ -86,13 +86,19 @@ async def upload_resume(user_id: int, file: UploadFile) -> dict:
                     ),
                 )
 
+            # Education / work-experience are user-owned and editable in the
+            # profile UI. Only seed them from a résumé when the user has none
+            # yet — re-uploads must not append near-duplicates (the extractor
+            # spells schools/titles slightly differently run to run).
+            cur.execute("SELECT 1 FROM user_educations WHERE user_id = %s LIMIT 1", (user_id,))
+            has_education = cur.fetchone() is not None
+
             edu = extracted.get("education") or {}
-            if edu.get("degree_type") or edu.get("field_of_study") or edu.get("school"):
+            if not has_education and (edu.get("degree_type") or edu.get("field_of_study") or edu.get("school")):
                 cur.execute(
                     """
                     INSERT INTO user_educations (user_id, degree_type, field_of_study, school, graduation_year)
                     VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT DO NOTHING
                     """,
                     (
                         user_id,
@@ -103,21 +109,24 @@ async def upload_resume(user_id: int, file: UploadFile) -> dict:
                     ),
                 )
 
-            for exp in extracted.get("work_experience") or []:
-                cur.execute(
-                    """
-                    INSERT INTO user_work_experience (user_id, position, company, start_date, end_date)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (
-                        user_id,
-                        exp.get("position"),
-                        exp.get("company"),
-                        exp.get("start_date"),
-                        exp.get("end_date"),
-                    ),
-                )
+            cur.execute("SELECT 1 FROM user_work_experience WHERE user_id = %s LIMIT 1", (user_id,))
+            has_experience = cur.fetchone() is not None
+
+            if not has_experience:
+                for exp in extracted.get("work_experience") or []:
+                    cur.execute(
+                        """
+                        INSERT INTO user_work_experience (user_id, position, company, start_date, end_date)
+                        VALUES (%s, %s, %s, %s, %s)
+                        """,
+                        (
+                            user_id,
+                            exp.get("position"),
+                            exp.get("company"),
+                            exp.get("start_date"),
+                            exp.get("end_date"),
+                        ),
+                    )
         conn.commit()
     except Exception as exc:
         log.warning("Resume-derived profile extraction failed for user %s: %s", user_id, exc)

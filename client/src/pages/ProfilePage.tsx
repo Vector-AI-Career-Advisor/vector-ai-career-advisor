@@ -7,64 +7,23 @@ import {
   listResumes, getResume, setActiveResume, renameResume,
 } from '../api/resumes'
 import type { ResumeInfo, ResumeListItem, ResumeDetail } from '../api/resumes'
-import type { JobFilters } from '../api/jobs'
 import {
   getProfileSummary, type ProfileSummary,
   getJobCore, updateJobCore, type JobCore,
   getJobPreferences, updateJobPreferences, type JobPreferences,
+  getEducation, addEducation, updateEducation, deleteEducation,
+  getWorkExperience, addWorkExperience, updateWorkExperience, deleteWorkExperience,
+  type Education, type EducationRow, type WorkExperience, type WorkExperienceRow,
 } from '../api/profile'
-import { ROLE_OPTIONS, LOCATION_OPTIONS, SENIORITIES, EDUCATION_LEVELS, EXPERIENCE_OPTIONS } from '../constants'
+import {
+  ROLE_OPTIONS, LOCATION_OPTIONS, SENIORITIES, EDUCATION_LEVELS, EXPERIENCE_OPTIONS,
+  humanizeCareerStage,
+} from '../constants'
 import './ProfilePage.css'
-
-// ── Saved-filter preset shape ──────────────────────────────────────────────
-
-export interface FilterPreset {
-  id: string
-  name: string
-  keyword?: string
-  seniority?: string
-  location?: string
-  posted_date?: string
-  roles?: string[]
-  years_experience_min?: number
-  skills?: string[]
-  createdAt: string
-}
-
-const PRESETS_KEY = 'vector_saved_filters'
-
-export function loadPresets(): FilterPreset[] {
-  try {
-    return JSON.parse(localStorage.getItem(PRESETS_KEY) ?? '[]')
-  } catch {
-    return []
-  }
-}
-
-export function savePreset(preset: Omit<FilterPreset, 'id' | 'createdAt'>): FilterPreset {
-  const presets = loadPresets()
-  const next: FilterPreset = {
-    ...preset,
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-  }
-  localStorage.setItem(PRESETS_KEY, JSON.stringify([next, ...presets]))
-  return next
-}
-
-export function deletePreset(id: string): void {
-  const presets = loadPresets().filter(p => p.id !== id)
-  localStorage.setItem(PRESETS_KEY, JSON.stringify(presets))
-}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-interface Props {
-  /** Called when the user clicks a saved-filter preset to apply it */
-  onApplyFilter?: (filters: JobFilters) => void
-}
-
-export default function ProfilePage({ onApplyFilter }: Props) {
+export default function ProfilePage() {
   const [email, setEmail]         = useState<string | null>(null)
   const [memberSince, setMemberSince] = useState<string | null>(null)
   const [resume, setResume]       = useState<ResumeInfo | null>(null)
@@ -76,9 +35,8 @@ export default function ProfilePage({ onApplyFilter }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [profileSummary, setProfileSummary] = useState<ProfileSummary | null>(null)
-  const [presets, setPresets]     = useState<FilterPreset[]>([])
-  const [showSaveModal, setShowSaveModal] = useState(false)
-  const [presetName, setPresetName] = useState('')
+  const [educationList, setEducationList]   = useState<EducationRow[]>([])
+  const [experienceList, setExperienceList] = useState<WorkExperienceRow[]>([])
 
   // ── Résumés (multiple) ─────────────────────────────────────────────────
   const [resumeList, setResumeList] = useState<ResumeListItem[]>([])
@@ -132,8 +90,17 @@ export default function ProfilePage({ onApplyFilter }: Props) {
 
   useEffect(() => { fetchResume() }, [fetchResume])
 
-  // ── Load presets ────────────────────────────────────────────────────────
-  useEffect(() => { setPresets(loadPresets()) }, [])
+  // ── Load education + work experience (editable) ─────────────────────────
+  const loadEduExp = useCallback(async () => {
+    const [edu, exp] = await Promise.all([
+      getEducation().catch(() => [] as EducationRow[]),
+      getWorkExperience().catch(() => [] as WorkExperienceRow[]),
+    ])
+    setEducationList(edu)
+    setExperienceList(exp)
+  }, [])
+
+  useEffect(() => { loadEduExp() }, [loadEduExp])
 
   // ── Load core + preferences ─────────────────────────────────────────────
   useEffect(() => {
@@ -254,20 +221,6 @@ export default function ProfilePage({ onApplyFilter }: Props) {
     }
   }
 
-  // ── Presets ──────────────────────────────────────────────────────────────
-  const handleDeletePreset = (id: string) => {
-    deletePreset(id)
-    setPresets(loadPresets())
-  }
-
-  const handleSavePreset = () => {
-    if (!presetName.trim()) return
-    savePreset({ name: presetName.trim() })
-    setPresets(loadPresets())
-    setPresetName('')
-    setShowSaveModal(false)
-  }
-
   // ── Derived ──────────────────────────────────────────────────────────────
   const initials = email ? email.slice(0, 2).toUpperCase() : '??'
 
@@ -275,14 +228,15 @@ export default function ProfilePage({ onApplyFilter }: Props) {
     d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
 
   const user = profileSummary?.user ?? {}
-  const skills = profileSummary?.skills ?? []
-  const softSkills = profileSummary?.soft_skills ?? []
-  const education = profileSummary?.education ?? {}
-  const experience = profileSummary?.work_experience ?? []
   const prefs = profileSummary?.work_preferences ?? {}
 
   return (
     <div className="profile-root">
+
+      <header className="profile-header">
+        <h1 className="profile-title">Your Profile</h1>
+        <p className="profile-subtitle">Everything Vector uses to match you with jobs.</p>
+      </header>
 
       {/* ── User Info ───────────────────────────────────────────────── */}
       <section className="profile-section">
@@ -318,7 +272,7 @@ export default function ProfilePage({ onApplyFilter }: Props) {
             </div>
             <div>
               <div className="summary-label">Career stage</div>
-              <div className="summary-value">{user.career_stage || 'Not set'}</div>
+              <div className="summary-value">{humanizeCareerStage(user.career_stage)}</div>
             </div>
             <div>
               <div className="summary-label">Experience</div>
@@ -326,46 +280,9 @@ export default function ProfilePage({ onApplyFilter }: Props) {
             </div>
           </div>
 
-          <div className="mini-section">
-            <div className="mini-title">Education</div>
-            <div className="mini-body">
-              {education.degree_type || education.field_of_study || education.school ? (
-                <>
-                  <div>{education.degree_type || 'Degree'} · {education.field_of_study || 'Field'}</div>
-                  <div>{education.school || 'School'}{education.graduation_year ? ` · ${education.graduation_year}` : ''}</div>
-                </>
-              ) : (
-                <div>Education not added yet.</div>
-              )}
-            </div>
-          </div>
+          <EducationSection rows={educationList} reload={loadEduExp} />
 
-          <div className="mini-section">
-            <div className="mini-title">Skills</div>
-            <div className="skill-tags">
-              {skills.length ? skills.map(skill => <span key={skill} className="skill-tag">{skill}</span>) : <span className="muted-empty">No skills saved yet.</span>}
-            </div>
-          </div>
-
-          <div className="mini-section">
-            <div className="mini-title">Soft skills</div>
-            <div className="skill-tags">
-              {softSkills.length ? softSkills.map(skill => <span key={skill} className="skill-tag soft">{skill}</span>) : <span className="muted-empty">No soft skills saved yet.</span>}
-            </div>
-          </div>
-
-          <div className="mini-section">
-            <div className="mini-title">Experience</div>
-            <div className="mini-body">
-              {experience.length ? experience.map((item, idx) => (
-                <div key={`${item.company ?? 'company'}-${idx}`} className="experience-row">
-                  <strong>{item.position || 'Role'}</strong>
-                  <span>{item.company || 'Company'}</span>
-                  <span>{item.start_date ? new Date(item.start_date).getFullYear() : ''}{item.end_date ? ` - ${new Date(item.end_date).getFullYear()}` : ' - Present'}</span>
-                </div>
-              )) : <div>No work experience added yet.</div>}
-            </div>
-          </div>
+          <ExperienceSection rows={experienceList} reload={loadEduExp} />
 
           <div className="mini-section">
             <div className="mini-title">Job filters</div>
@@ -599,95 +516,6 @@ export default function ProfilePage({ onApplyFilter }: Props) {
           )}
         </div>
       </section>
-
-      {/* ── Saved Filters ───────────────────────────────────────────── */}
-      <section className="profile-section">
-        <div className="section-header-row">
-          <SectionHeader
-            title="Saved Filters"
-            badge={presets.length > 0 ? `${presets.length}` : 'None'}
-            active={presets.length > 0}
-          />
-        </div>
-
-        <div className="profile-card presets-card">
-          {presets.length === 0 ? (
-            <div className="presets-empty">
-              <div className="presets-empty-icon"><FilterIcon /></div>
-              <p className="presets-empty-title">No saved filters yet</p>
-              <p className="presets-empty-sub">
-                Head to the Jobs tab, set your filters, then save them here for quick access.
-              </p>
-            </div>
-          ) : (
-            <ul className="presets-list">
-              {presets.map(p => (
-                <li key={p.id} className="preset-item">
-                  <div className="preset-meta">
-                    <span className="preset-name">{p.name}</span>
-                    <div className="preset-tags">
-                      {p.keyword   && <Tag label={p.keyword}   color="purple" />}
-                      {p.seniority && <Tag label={p.seniority} color="blue"   />}
-                      {p.location  && <Tag label={p.location}  color="green"  />}
-                    </div>
-                  </div>
-                  <div className="preset-actions">
-                    {onApplyFilter && (
-                      <button
-                        className="btn-apply-preset"
-                        onClick={() => onApplyFilter({
-                          keyword:  p.keyword,
-                          seniority: p.seniority,
-                          location: p.location,
-                        })}
-                      >
-                        Apply
-                      </button>
-                    )}
-                    <button
-                      className="btn-delete-preset"
-                      onClick={() => handleDeletePreset(p.id)}
-                      aria-label="Delete preset"
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      {/* ── Save preset modal ───────────────────────────────────────── */}
-      {showSaveModal && (
-        <>
-          <div className="modal-overlay" onClick={() => setShowSaveModal(false)} />
-          <div className="modal">
-            <h3 className="modal-title">Save Filter Preset</h3>
-            <input
-              className="modal-input"
-              placeholder="e.g. Senior Berlin Python"
-              value={presetName}
-              onChange={e => setPresetName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
-              autoFocus
-            />
-            <div className="modal-actions">
-              <button className="btn-modal-cancel" onClick={() => setShowSaveModal(false)}>
-                Cancel
-              </button>
-              <button
-                className="btn-modal-save"
-                onClick={handleSavePreset}
-                disabled={!presetName.trim()}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   )
 }
@@ -703,8 +531,238 @@ function SectionHeader({ title, badge, active }: { title: string; badge: string;
   )
 }
 
-function Tag({ label, color }: { label: string; color: 'purple' | 'blue' | 'green' }) {
-  return <span className={`preset-tag preset-tag-${color}`}>{label}</span>
+// ── Editable Education / Experience ────────────────────────────────────────
+
+const yearOf = (d?: string | null) => (d ? new Date(d).getFullYear() : '')
+
+function EducationSection({ rows, reload }: { rows: EducationRow[]; reload: () => void }) {
+  const [adding, setAdding] = useState(false)
+  return (
+    <div className="mini-section">
+      <div className="mini-head">
+        <div className="mini-title">Education</div>
+        {!adding && <button className="mini-add" onClick={() => setAdding(true)}>+ Add</button>}
+      </div>
+      <div className="entry-list">
+        {rows.map(r => <EducationEntry key={r.id} row={r} reload={reload} />)}
+        {adding && (
+          <EducationEntry
+            row={{ id: 0, degree_type: '', field_of_study: '', school: '', graduation_year: new Date().getFullYear() }}
+            startEditing
+            onCancelNew={() => setAdding(false)}
+            reload={() => { setAdding(false); reload() }}
+          />
+        )}
+        {!rows.length && !adding && <span className="muted-empty">No education added yet.</span>}
+      </div>
+    </div>
+  )
+}
+
+function EducationEntry({
+  row, reload, startEditing, onCancelNew,
+}: {
+  row: EducationRow
+  reload: () => void
+  startEditing?: boolean
+  onCancelNew?: () => void
+}) {
+  const toForm = (r: EducationRow): Education => ({
+    degree_type: r.degree_type ?? '',
+    field_of_study: r.field_of_study ?? '',
+    school: r.school ?? '',
+    graduation_year: r.graduation_year ?? new Date().getFullYear(),
+    relevant_courses: r.relevant_courses ?? undefined,
+    academic_highlights: r.academic_highlights ?? undefined,
+  })
+  const [editing, setEditing] = useState(!!startEditing)
+  const [form, setForm] = useState<Education>(toForm(row))
+  const [busy, setBusy] = useState(false)
+
+  const valid = form.degree_type.trim() && form.field_of_study.trim() && form.school.trim() && !!form.graduation_year
+
+  const save = async () => {
+    if (!valid || busy) return
+    setBusy(true)
+    try {
+      if (row.id === 0) await addEducation(form)
+      else await updateEducation(row.id, form)
+      setEditing(false)
+      reload()
+    } finally { setBusy(false) }
+  }
+  const remove = async () => {
+    if (!window.confirm('Remove this education entry?')) return
+    setBusy(true)
+    try { await deleteEducation(row.id); reload() } finally { setBusy(false) }
+  }
+  const cancel = () => {
+    if (row.id === 0) { onCancelNew?.(); return }
+    setForm(toForm(row))
+    setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <div className="entry-row">
+        <div className="experience-row">
+          <strong>{row.degree_type || 'Degree'} · {row.field_of_study || 'Field'}</strong>
+          <span>{row.school || 'School'}</span>
+          {row.graduation_year ? <span>· {row.graduation_year}</span> : null}
+        </div>
+        <div className="entry-actions">
+          <button className="btn-replace" onClick={() => setEditing(true)}>Edit</button>
+          <button className="btn-delete-resume" onClick={remove} disabled={busy} aria-label="Delete education"><TrashIcon /></button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="entry-edit">
+      <div className="entry-edit-grid">
+        <label className="field">
+          <span className="field-label">Degree</span>
+          <input className="entry-input" value={form.degree_type} placeholder="B.Sc."
+            onChange={e => setForm({ ...form, degree_type: e.target.value })} />
+        </label>
+        <label className="field">
+          <span className="field-label">Field of study</span>
+          <input className="entry-input" value={form.field_of_study} placeholder="Computer Science"
+            onChange={e => setForm({ ...form, field_of_study: e.target.value })} />
+        </label>
+        <label className="field">
+          <span className="field-label">School</span>
+          <input className="entry-input" value={form.school} placeholder="University name"
+            onChange={e => setForm({ ...form, school: e.target.value })} />
+        </label>
+        <label className="field">
+          <span className="field-label">Graduation year</span>
+          <input className="entry-input" type="number" value={form.graduation_year || ''} placeholder="2026"
+            onChange={e => setForm({ ...form, graduation_year: e.target.value ? Number(e.target.value) : 0 })} />
+        </label>
+      </div>
+      <div className="entry-edit-actions">
+        <button className="btn-replace" onClick={cancel} disabled={busy}>Cancel</button>
+        <button className="btn-modal-save" onClick={save} disabled={busy || !valid}>{busy ? 'Saving…' : 'Save'}</button>
+      </div>
+    </div>
+  )
+}
+
+function ExperienceSection({ rows, reload }: { rows: WorkExperienceRow[]; reload: () => void }) {
+  const [adding, setAdding] = useState(false)
+  return (
+    <div className="mini-section">
+      <div className="mini-head">
+        <div className="mini-title">Experience</div>
+        {!adding && <button className="mini-add" onClick={() => setAdding(true)}>+ Add</button>}
+      </div>
+      <div className="entry-list">
+        {rows.map(r => <ExperienceEntry key={r.id} row={r} reload={reload} />)}
+        {adding && (
+          <ExperienceEntry
+            row={{ id: 0, position: '', company: '', start_date: '', end_date: null }}
+            startEditing
+            onCancelNew={() => setAdding(false)}
+            reload={() => { setAdding(false); reload() }}
+          />
+        )}
+        {!rows.length && !adding && <span className="muted-empty">No work experience added yet.</span>}
+      </div>
+    </div>
+  )
+}
+
+function ExperienceEntry({
+  row, reload, startEditing, onCancelNew,
+}: {
+  row: WorkExperienceRow
+  reload: () => void
+  startEditing?: boolean
+  onCancelNew?: () => void
+}) {
+  const toForm = (r: WorkExperienceRow): WorkExperience => ({
+    position: r.position ?? '',
+    company: r.company ?? '',
+    start_date: r.start_date ?? '',
+    end_date: r.end_date ?? '',
+    description: r.description ?? null,
+  })
+  const [editing, setEditing] = useState(!!startEditing)
+  const [form, setForm] = useState<WorkExperience>(toForm(row))
+  const [busy, setBusy] = useState(false)
+
+  const valid = form.position.trim() && form.company.trim() && !!form.start_date
+
+  const save = async () => {
+    if (!valid || busy) return
+    setBusy(true)
+    const payload: WorkExperience = { ...form, end_date: form.end_date || null }
+    try {
+      if (row.id === 0) await addWorkExperience(payload)
+      else await updateWorkExperience(row.id, payload)
+      setEditing(false)
+      reload()
+    } finally { setBusy(false) }
+  }
+  const remove = async () => {
+    if (!window.confirm('Remove this experience entry?')) return
+    setBusy(true)
+    try { await deleteWorkExperience(row.id); reload() } finally { setBusy(false) }
+  }
+  const cancel = () => {
+    if (row.id === 0) { onCancelNew?.(); return }
+    setForm(toForm(row))
+    setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <div className="entry-row">
+        <div className="experience-row">
+          <strong>{row.position || 'Role'}</strong>
+          <span>{row.company || 'Company'}</span>
+          <span>{yearOf(row.start_date)}{row.end_date ? ` - ${yearOf(row.end_date)}` : ' - Present'}</span>
+        </div>
+        <div className="entry-actions">
+          <button className="btn-replace" onClick={() => setEditing(true)}>Edit</button>
+          <button className="btn-delete-resume" onClick={remove} disabled={busy} aria-label="Delete experience"><TrashIcon /></button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="entry-edit">
+      <div className="entry-edit-grid">
+        <label className="field">
+          <span className="field-label">Title</span>
+          <input className="entry-input" value={form.position} placeholder="Software Engineer"
+            onChange={e => setForm({ ...form, position: e.target.value })} />
+        </label>
+        <label className="field">
+          <span className="field-label">Company</span>
+          <input className="entry-input" value={form.company} placeholder="Company name"
+            onChange={e => setForm({ ...form, company: e.target.value })} />
+        </label>
+        <label className="field">
+          <span className="field-label">Start date</span>
+          <input className="entry-input" type="date" value={form.start_date}
+            onChange={e => setForm({ ...form, start_date: e.target.value })} />
+        </label>
+        <label className="field">
+          <span className="field-label">End date <span className="field-hint">— leave blank if current</span></span>
+          <input className="entry-input" type="date" value={form.end_date ?? ''}
+            onChange={e => setForm({ ...form, end_date: e.target.value })} />
+        </label>
+      </div>
+      <div className="entry-edit-actions">
+        <button className="btn-replace" onClick={cancel} disabled={busy}>Cancel</button>
+        <button className="btn-modal-save" onClick={save} disabled={busy || !valid}>{busy ? 'Saving…' : 'Save'}</button>
+      </div>
+    </div>
+  )
 }
 
 function ChipSelect({
@@ -793,15 +851,6 @@ function WarnIcon() {
       <circle cx="12" cy="12" r="10"/>
       <line x1="12" y1="8" x2="12" y2="12"/>
       <line x1="12" y1="16" x2="12.01" y2="16"/>
-    </svg>
-  )
-}
-
-function FilterIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
     </svg>
   )
 }

@@ -2,6 +2,25 @@
 
 export const SENIORITIES = ['Junior', 'Mid', 'Senior', 'Lead', 'Staff', 'Principal']
 
+// Career-stage codes are stored raw (e.g. "recent_graduate"); map them to
+// display labels for the profile UI.
+export const CAREER_STAGE_LABELS: Record<string, string> = {
+  student: 'Student',
+  recent_graduate: 'Recent graduate',
+  working_professional: 'Working professional',
+  career_switcher: 'Career switcher',
+  between_jobs: 'Between jobs',
+  returning: 'Returning after a break',
+}
+
+export function humanizeCareerStage(value?: string | null): string {
+  if (!value) return 'Not set'
+  return (
+    CAREER_STAGE_LABELS[value] ??
+    value.replace(/[_-]+/g, ' ').replace(/^\w/, c => c.toUpperCase())
+  )
+}
+
 export const ROLE_OPTIONS = [
   'Frontend',
   'Backend',

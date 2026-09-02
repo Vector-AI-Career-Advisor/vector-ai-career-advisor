@@ -22,6 +22,22 @@ export interface Education {
   academic_highlights?: string
 }
 
+export interface EducationRow extends Education {
+  id: number
+}
+
+export interface WorkExperience {
+  position: string
+  company: string
+  start_date: string           // YYYY-MM-DD
+  end_date?: string | null      // YYYY-MM-DD, null = present
+  description?: string | null
+}
+
+export interface WorkExperienceRow extends WorkExperience {
+  id: number
+}
+
 export interface Skill {
   skill: string
   category?: string
@@ -96,8 +112,38 @@ export const addEducation = async (data: Education): Promise<any> => {
   return response
 }
 
-export const getEducation = async (): Promise<any[]> => {
+export const getEducation = async (): Promise<EducationRow[]> => {
   const { data } = await api.get('/profile/education')
+  return data
+}
+
+export const updateEducation = async (id: number, data: Education): Promise<EducationRow> => {
+  const { data: response } = await api.put(`/profile/education/${id}`, data)
+  return response
+}
+
+export const deleteEducation = async (id: number): Promise<{ success: boolean }> => {
+  const { data } = await api.delete(`/profile/education/${id}`)
+  return data
+}
+
+export const getWorkExperience = async (): Promise<WorkExperienceRow[]> => {
+  const { data } = await api.get('/profile/work-experience')
+  return data
+}
+
+export const addWorkExperience = async (data: WorkExperience): Promise<WorkExperienceRow> => {
+  const { data: response } = await api.post('/profile/work-experience', data)
+  return response
+}
+
+export const updateWorkExperience = async (id: number, data: WorkExperience): Promise<WorkExperienceRow> => {
+  const { data: response } = await api.put(`/profile/work-experience/${id}`, data)
+  return response
+}
+
+export const deleteWorkExperience = async (id: number): Promise<{ success: boolean }> => {
+  const { data } = await api.delete(`/profile/work-experience/${id}`)
   return data
 }
 

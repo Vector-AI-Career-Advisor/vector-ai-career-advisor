@@ -7,9 +7,10 @@ import JobCard from '../components/JobCard'
 import JobDrawer from '../components/JobDrawer'
 import AgentChat from '../components/AgentChat'
 import StatsPage from './StatsPage'
-import ProfilePage, { savePreset, loadPresets, FilterPreset } from './ProfilePage'
+import ProfilePage from './ProfilePage'
 import ApplicationsPage from './ApplicationsPage'
 import ThemeToggle from '../components/ThemeToggle'
+import { savePreset, loadPresets, deletePreset, type FilterPreset } from '../lib/presets'
 import { SENIORITIES, ROLE_OPTIONS, LOCATION_OPTIONS } from '../constants'
 import './JobsPage.css'
 
@@ -92,8 +93,13 @@ export default function JobsPage() {
     return () => clearTimeout(t)
   }, [keyword])
 
-  // Refresh preset count badge whenever the presets change
+  // Keep the saved-filter list in sync whenever we switch tabs
   useEffect(() => { setPresets(loadPresets()) }, [activeTab])
+
+  const handleDeletePreset = (id: string) => {
+    deletePreset(id)
+    setPresets(loadPresets())
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -273,9 +279,6 @@ export default function JobsPage() {
               <circle cx="12" cy="7" r="4"/>
             </svg>
             Profile
-            {presets.length > 0 && (
-              <span className="tab-badge">{presets.length}</span>
-            )}
           </button>
         </div>
 
@@ -323,7 +326,7 @@ export default function JobsPage() {
       {/* ── Profile view ── */}
       {activeTab === 'profile' && (
         <div className="stats-view">
-          <ProfilePage onApplyFilter={handleApplyFilter} />
+          <ProfilePage />
         </div>
       )}
 
@@ -538,6 +541,46 @@ export default function JobsPage() {
                   </div>
                 </div>
 
+                {/* ── Saved filter presets ── */}
+                {presets.length > 0 && (
+                  <div className="filter-group">
+                    <label className="filter-label">Saved filters</label>
+                    <ul className="saved-preset-list">
+                      {presets.map(p => (
+                        <li key={p.id} className="saved-preset">
+                          <button
+                            className="saved-preset-apply"
+                            title="Apply this filter set"
+                            onClick={() => handleApplyFilter({
+                              keyword: p.keyword,
+                              seniority: p.seniority,
+                              location: p.location,
+                              posted_date: p.posted_date,
+                              roles: p.roles,
+                              years_experience_min: p.years_experience_min,
+                              skills: p.skills,
+                            })}
+                          >
+                            {p.name}
+                          </button>
+                          <button
+                            className="saved-preset-delete"
+                            aria-label={`Delete ${p.name}`}
+                            onClick={() => handleDeletePreset(p.id)}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                              <path d="M10 11v6M14 11v6"/>
+                            </svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* ── Save Filters ── */}
                 <div className="filter-group" style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
                   <button
@@ -559,7 +602,7 @@ export default function JobsPage() {
                         stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <polyline points="20 6 9 17 4 12"/>
                       </svg>
-                      Saved to your profile
+                      Saved to your filters
                     </p>
                   )}
                 </div>
