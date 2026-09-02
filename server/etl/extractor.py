@@ -17,6 +17,7 @@ from server.web.core.config import (
     VALID_ROLES,
     VALID_SENIORITY,
 )
+from .skills import normalize_skills
 from .utils import company_slug
 
 log = logging.getLogger(__name__)
@@ -227,7 +228,10 @@ def _validate(data: dict, title: str) -> dict:
         llm_key = "experience" if key == "yearsexperience" else key
         val     = data.get(llm_key, data.get(key, default))
 
-        if key in {"skills_must", "skills_nice", "past_experience"}:
+        if key in {"skills_must", "skills_nice"}:
+            result[key] = normalize_skills(val)
+
+        elif key == "past_experience":
             result[key] = [str(v) for v in val if v] if isinstance(val, list) else []
 
         elif key == "yearsexperience":

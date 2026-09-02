@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Job } from '../api/jobs'
+import { formatSkill } from '../lib/skills'
 import './JobCard.css'
 
 interface Props {
@@ -69,7 +70,7 @@ export default function JobCard({ job, onClick }: Props) {
         {job.skills_must && job.skills_must.length > 0 && (
           <div className="job-skills">
             {job.skills_must.slice(0, 4).map(s => (
-              <span key={s} className="skill-chip">{s}</span>
+              <span key={s} className="skill-chip">{formatSkill(s)}</span>
             ))}
             {job.skills_must.length > 4 && (
               <span className="skill-more">+{job.skills_must.length - 4}</span>

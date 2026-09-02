@@ -403,59 +403,123 @@
 /* ── Résumé list ────────────────────────────────────────────────────────── */
 .resume-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1rem; }
 
-/* Near-white lavender card — same in both themes, always dark text on it. */
+/* Lavender-tinted résumé card. Its own token set so the card keeps its own
+   identity in both themes — defaults are dark (matching :root), overridden
+   under [data-theme="light"] below. */
 .resume-list-item {
+  --rc-bg:            #171528;
+  --rc-bg-active:     #201c3a;
+  --rc-border:        rgba(139,110,247,0.22);
+  --rc-border-active: rgba(139,110,247,0.55);
+  --rc-shadow:        0 4px 16px rgba(0,0,0,0.4);
+  --rc-fg:            #ece9fb;
+  --rc-fg-muted:      #9a93b8;
+  --rc-icon-bg:       rgba(139,110,247,0.18);
+  --rc-icon-border:   rgba(139,110,247,0.36);
+  --rc-icon-fg:       #b9a5ff;
+  --rc-btn-bg:        rgba(255,255,255,0.05);
+  --rc-btn-border:    rgba(139,110,247,0.34);
+  --rc-btn-fg:        #cfbdff;
+  --rc-btn-bg-hi:     rgba(139,110,247,0.2);
+  --rc-btn-border-hi: rgba(139,110,247,0.6);
+  --rc-del-border:    rgba(255,255,255,0.12);
+  --rc-del-fg:        #9a93b8;
+  --rc-del-bg-hi:     rgba(248,113,113,0.18);
+  --rc-del-border-hi: rgba(248,113,113,0.5);
+  --rc-del-fg-hi:     #f87171;
+  --rc-input-bg:      rgba(255,255,255,0.05);
+  --rc-input-border:  rgba(139,110,247,0.45);
+  --rc-placeholder:   #7d7799;
+  --rc-badge-bg:      rgba(139,110,247,0.28);
+  --rc-badge-fg:      #cfbdff;
+  --rc-chip-bg:       rgba(255,255,255,0.05);
+  --rc-chip-fg:       #cfbdff;
+  --rc-chip-fg-hi:    #e9e1ff;
+  --rc-divider:       rgba(139,110,247,0.22);
+
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 0.75rem; padding: 0.85rem; border: 1px solid rgba(124,90,247,0.16);
+  gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--rc-border);
   border-radius: var(--radius);
-  background: #fcfbff;
+  background: var(--rc-bg);
 }
+
+[data-theme="light"] .resume-list-item {
+  --rc-bg:            #fcfbff;
+  --rc-bg-active:     #f7f4ff;
+  --rc-border:        rgba(124,90,247,0.16);
+  --rc-border-active: rgba(124,90,247,0.5);
+  --rc-shadow:        0 4px 14px rgba(20,20,40,0.12);
+  --rc-fg:            #241f3a;
+  --rc-fg-muted:      #6d6590;
+  --rc-icon-bg:       rgba(124,90,247,0.12);
+  --rc-icon-border:   rgba(124,90,247,0.22);
+  --rc-icon-fg:       #6d4fd0;
+  --rc-btn-bg:        #ffffff;
+  --rc-btn-border:    rgba(124,90,247,0.3);
+  --rc-btn-fg:        #6338cf;
+  --rc-btn-bg-hi:     #ffffff;
+  --rc-btn-border-hi: rgba(124,90,247,0.55);
+  --rc-del-border:    rgba(0,0,0,0.1);
+  --rc-del-fg:        #7a7290;
+  --rc-del-bg-hi:     rgba(248,113,113,0.14);
+  --rc-del-border-hi: rgba(248,113,113,0.45);
+  --rc-del-fg-hi:     #d92626;
+  --rc-input-bg:      #ffffff;
+  --rc-input-border:  rgba(124,90,247,0.35);
+  --rc-placeholder:   #9a93b2;
+  --rc-badge-bg:      rgba(124,90,247,0.16);
+  --rc-badge-fg:      #5b3fd1;
+  --rc-chip-bg:       #ffffff;
+  --rc-chip-fg:       #5b3fd1;
+  --rc-chip-fg-hi:    #4a2fc0;
+  --rc-divider:       rgba(124,90,247,0.18);
+}
+
 .resume-list-item.is-active {
-  border-color: rgba(124,90,247,0.5);
-  background: #f7f4ff;
-  box-shadow: 0 4px 14px rgba(20,20,40,0.12);
+  border-color: var(--rc-border-active);
+  background: var(--rc-bg-active);
+  box-shadow: var(--rc-shadow);
 }
 .resume-list-main { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
 
-/* Dark, readable content on the light lavender card (independent of app theme) */
-.resume-list-item .resume-filename { color: #241f3a; }
-.resume-list-item .resume-dates { color: #6d6590; }
+.resume-list-item .resume-filename { color: var(--rc-fg); }
+.resume-list-item .resume-dates { color: var(--rc-fg-muted); }
 .resume-list-item .resume-file-icon {
-  background: rgba(124,90,247,0.12); border-color: rgba(124,90,247,0.22); color: #6d4fd0;
+  background: var(--rc-icon-bg); border-color: var(--rc-icon-border); color: var(--rc-icon-fg);
 }
 .resume-list-item .btn-replace {
-  background: #ffffff; border-color: rgba(124,90,247,0.3); color: #6338cf;
+  background: var(--rc-btn-bg); border-color: var(--rc-btn-border); color: var(--rc-btn-fg);
 }
 .resume-list-item .btn-replace:hover {
-  background: #ffffff; border-color: rgba(124,90,247,0.55);
+  background: var(--rc-btn-bg-hi); border-color: var(--rc-btn-border-hi);
 }
 .resume-list-item .btn-delete-resume {
-  background: #ffffff; border-color: rgba(0,0,0,0.1); color: #7a7290;
+  background: var(--rc-btn-bg); border-color: var(--rc-del-border); color: var(--rc-del-fg);
 }
 .resume-list-item .btn-delete-resume:hover {
-  background: rgba(248,113,113,0.14); border-color: rgba(248,113,113,0.45); color: #d92626;
+  background: var(--rc-del-bg-hi); border-color: var(--rc-del-border-hi); color: var(--rc-del-fg-hi);
 }
 .resume-list-item .modal-input {
-  background: #ffffff; border-color: rgba(124,90,247,0.35); color: #241f3a;
+  background: var(--rc-input-bg); border-color: var(--rc-input-border); color: var(--rc-fg);
 }
-.resume-list-item .modal-input::placeholder { color: #9a93b2; }
-.resume-list-item .mini-title { color: #6d6590; }
-.resume-list-item .muted-empty { color: #6d6590; }
+.resume-list-item .modal-input::placeholder { color: var(--rc-placeholder); opacity: 1; }
+.resume-list-item .mini-title { color: var(--rc-fg-muted); }
+.resume-list-item .muted-empty { color: var(--rc-fg-muted); }
 .resume-list-item .skill-tag,
 .resume-list-item .skill-tag.soft {
-  background: #ffffff; color: #5b3fd1; border-color: rgba(124,90,247,0.24);
+  background: var(--rc-chip-bg); color: var(--rc-chip-fg); border-color: var(--rc-btn-border);
 }
 .resume-list-item .skill-tag:hover,
 .resume-list-item .skill-tag.soft:hover {
-  color: #4a2fc0; border-color: rgba(124,90,247,0.45);
+  color: var(--rc-chip-fg-hi); border-color: var(--rc-btn-border-hi);
 }
 
 .resume-active-badge {
   margin-left: 0.5rem; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.05em; padding: 0.15rem 0.4rem;
-  border-radius: 4px; background: rgba(124,90,247,0.16); color: #5b3fd1;
+  border-radius: 4px; background: var(--rc-badge-bg); color: var(--rc-badge-fg);
 }
 .resume-skill-panel {
   flex-basis: 100%; margin-top: 0.6rem; padding-top: 0.75rem;
-  border-top: 1px solid rgba(124,90,247,0.18);
+  border-top: 1px solid var(--rc-divider);
 }

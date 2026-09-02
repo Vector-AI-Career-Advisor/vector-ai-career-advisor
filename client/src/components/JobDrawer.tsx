@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Job } from '../api/jobs'
 import { createApplication } from '../api/applications'
+import { formatSkill } from '../lib/skills'
 import './JobDrawer.css'
 
 interface Props {
@@ -103,7 +104,7 @@ export default function JobDrawer({ job, onClose, chatWidth = 0 }: Props) {
             <Section title="Must-Have Skills">
               <div className="skill-list">
                 {job.skills_must.map(s => (
-                  <span key={s} className="skill-chip-drawer must">{s}</span>
+                  <span key={s} className="skill-chip-drawer must">{formatSkill(s)}</span>
                 ))}
               </div>
             </Section>
@@ -113,7 +114,7 @@ export default function JobDrawer({ job, onClose, chatWidth = 0 }: Props) {
             <Section title="Nice to Have">
               <div className="skill-list">
                 {job.skills_nice.map(s => (
-                  <span key={s} className="skill-chip-drawer nice">{s}</span>
+                  <span key={s} className="skill-chip-drawer nice">{formatSkill(s)}</span>
                 ))}
               </div>
             </Section>

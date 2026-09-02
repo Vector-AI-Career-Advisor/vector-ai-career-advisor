@@ -744,6 +744,33 @@ def fetch_jobs_by_ids(conn, ids: List[str]) -> List[dict]:
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
+def fetch_all_job_skills(conn) -> List[dict]:
+    """Return [{id, skills_must, skills_nice}] for every job — used by the
+    skill-normalisation backfill (scripts/backfill_skills.py)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, skills_must, skills_nice FROM jobs;")
+        return [
+            {"id": row[0], "skills_must": row[1] or [], "skills_nice": row[2] or []}
+            for row in cur.fetchall()
+        ]
+
+
+def update_job_skills(conn, updates: List[tuple]) -> int:
+    """Bulk-update jobs.skills_must / jobs.skills_nice.
+
+    `updates` is a list of (job_id, skills_must, skills_nice) tuples. Does not
+    commit — the caller controls the transaction. Returns the number of rows sent.
+    """
+    if not updates:
+        return 0
+    with conn.cursor() as cur:
+        cur.executemany(
+            "UPDATE jobs SET skills_must = %s, skills_nice = %s WHERE id = %s;",
+            [(must, nice, job_id) for job_id, must, nice in updates],
+        )
+    return len(updates)
+
+
 def insert_evaluation(
     conn,
     agent_type: str,

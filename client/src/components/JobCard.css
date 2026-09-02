@@ -13,6 +13,7 @@
   position: relative;
   overflow: hidden;
   width: 100%;
+  height: 184px;
 }
 
 .job-card::before {
@@ -49,7 +50,13 @@
   border: 1px solid var(--border);
 }
 
-.job-body { flex: 1; min-width: 0; }
+.job-body {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 
 .job-meta-top {
   display: flex; justify-content: space-between; align-items: center;
@@ -75,9 +82,10 @@
 
 /* Seniority · location · experience — plain text, no bubbles */
 .job-meta-line {
-  display: flex; flex-wrap: wrap; align-items: center;
+  display: flex; flex-wrap: nowrap; align-items: center;
   margin-bottom: 0.75rem;
   font-size: 0.75rem; color: var(--muted);
+  overflow: hidden; white-space: nowrap;
 }
 .job-meta-item {
   display: inline-flex; align-items: center; gap: 0.25rem;
@@ -101,13 +109,19 @@
 .tag-default  { background: var(--surface2); color: var(--muted); }
 .tag-location { background: var(--surface2); color: var(--muted); }
 
-.job-skills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.job-skills {
+  display: flex; flex-wrap: wrap; gap: 0.35rem;
+  margin-top: auto;
+  /* one row only — extra chips wrap out of view instead of being clipped mid-bubble */
+  max-height: 1.6rem; overflow: hidden;
+}
 .skill-chip {
+  flex-shrink: 0; white-space: nowrap;
   background: rgba(124, 90, 247, 0.1); border: 1px solid rgba(124, 90, 247, 0.24);
   border-radius: 5px; padding: 0.15rem 0.5rem;
   font-family: var(--font-mono); font-size: 0.7rem; color: var(--text);
 }
-.skill-more { font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted); align-self: center; }
+.skill-more { flex-shrink: 0; font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted); align-self: center; }
 
 .job-arrow {
   flex-shrink: 0; font-size: 1.1rem; color: var(--muted);
