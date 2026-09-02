@@ -30,9 +30,155 @@ def init_db(conn=None) -> None:
                     id         SERIAL PRIMARY KEY,
                     email      TEXT UNIQUE NOT NULL,
                     password   TEXT NOT NULL,
+                    first_name TEXT,
+                    last_name  TEXT,
+                    phone      TEXT,
+                    city       TEXT,
+                    years_experience INTEGER,
+                    career_stage TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS city TEXT;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS years_experience INTEGER;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS career_stage TEXT;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();")
+            
+            # ── OAuth Identities ───────────────────────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS oauth_identities (
+                    id                 SERIAL PRIMARY KEY,
+                    user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    provider           TEXT NOT NULL,
+                    provider_user_id   TEXT NOT NULL,
+                    created_at         TIMESTAMP DEFAULT NOW(),
+                    UNIQUE (provider, provider_user_id)
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS oauth_identities_user_idx ON oauth_identities (user_id);")
+            
+            
+            # ── User Profile Tables ────────────────────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_educations (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    degree_type TEXT,
+                    field_of_study TEXT,
+                    school TEXT,
+                    graduation_year INTEGER,
+                    relevant_courses TEXT,
+                    academic_highlights TEXT,
                     created_at TIMESTAMP DEFAULT NOW()
                 );
             """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_educations_user_idx ON user_educations (user_id);")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_skills (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    skill      TEXT NOT NULL,
+                    category   TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE (user_id, skill)
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_skills_user_idx ON user_skills (user_id);")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_soft_skills (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    skill      TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE (user_id, skill)
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_soft_skills_user_idx ON user_soft_skills (user_id);")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_languages (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    language   TEXT NOT NULL,
+                    proficiency TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE (user_id, language)
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_languages_user_idx ON user_languages (user_id);")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_work_experience (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    position   TEXT,
+                    company    TEXT,
+                    start_date DATE,
+                    end_date   DATE,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_work_experience_user_idx ON user_work_experience (user_id);")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_certifications (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    certification TEXT NOT NULL,
+                    issuer     TEXT,
+                    date_obtained DATE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_certifications_user_idx ON user_certifications (user_id);")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_volunteering (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    role       TEXT NOT NULL,
+                    organization TEXT,
+                    start_date DATE,
+                    end_date   DATE,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_volunteering_user_idx ON user_volunteering (user_id);")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_clubs_orgs (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    name       TEXT NOT NULL,
+                    role       TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_clubs_orgs_user_idx ON user_clubs_orgs (user_id);")
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_preferences (
+                    id         SERIAL PRIMARY KEY,
+                    user_id    INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    github_url TEXT,
+                    portfolio_url TEXT,
+                    work_preferences JSONB,
+                    interests JSONB,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS user_preferences_user_idx ON user_preferences (user_id);")
+            
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS resumes (
                     id          SERIAL PRIMARY KEY,

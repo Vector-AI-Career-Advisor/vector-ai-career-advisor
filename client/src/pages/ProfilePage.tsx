@@ -5,6 +5,7 @@ import api from '../api/client'
 import { uploadResume, getMyResume, deleteResume } from '../api/resumes'
 import type { ResumeInfo } from '../api/resumes'
 import type { JobFilters } from '../api/jobs'
+import { getProfileSummary, type ProfileSummary } from '../api/profile'
 import './ProfilePage.css'
 
 // ── Saved-filter preset shape ──────────────────────────────────────────────
@@ -66,6 +67,7 @@ export default function ProfilePage({ onApplyFilter }: Props) {
   const [dragging, setDragging]   = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const [profileSummary, setProfileSummary] = useState<ProfileSummary | null>(null)
   const [presets, setPresets]     = useState<FilterPreset[]>([])
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [presetName, setPresetName] = useState('')
@@ -86,11 +88,16 @@ export default function ProfilePage({ onApplyFilter }: Props) {
       .catch(() => {/* ignore */})
   }, [])
 
-  // ── Load resume ─────────────────────────────────────────────────────────
+  // ── Load resume and profile summary ──────────────────────────────────────
   const fetchResume = useCallback(async () => {
     setResumeLoading(true)
     try {
-      setResume(await getMyResume())
+      const [nextResume, summary] = await Promise.all([
+        getMyResume(),
+        getProfileSummary().catch(() => null),
+      ])
+      setResume(nextResume)
+      setProfileSummary(summary)
     } finally {
       setResumeLoading(false)
     }
@@ -165,6 +172,13 @@ export default function ProfilePage({ onApplyFilter }: Props) {
   const fmt = (d?: string) =>
     d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
 
+  const user = profileSummary?.user ?? {}
+  const skills = profileSummary?.skills ?? []
+  const softSkills = profileSummary?.soft_skills ?? []
+  const education = profileSummary?.education ?? {}
+  const experience = profileSummary?.work_experience ?? []
+  const prefs = profileSummary?.work_preferences ?? {}
+
   return (
     <div className="profile-root">
 
@@ -183,6 +197,82 @@ export default function ProfilePage({ onApplyFilter }: Props) {
           <div className="user-badge">
             <span className="badge-dot" />
             Active
+          </div>
+        </div>
+      </section>
+
+      {/* ── Profile Snapshot ─────────────────────────────────────────── */}
+      <section className="profile-section">
+        <SectionHeader title="Profile" badge="Summary" active />
+        <div className="profile-card profile-summary-card">
+          <div className="summary-grid">
+            <div>
+              <div className="summary-label">Name</div>
+              <div className="summary-value">{user.first_name || user.last_name ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() : 'Not filled yet'}</div>
+            </div>
+            <div>
+              <div className="summary-label">Location</div>
+              <div className="summary-value">{user.city || 'Not set'}</div>
+            </div>
+            <div>
+              <div className="summary-label">Career stage</div>
+              <div className="summary-value">{user.career_stage || 'Not set'}</div>
+            </div>
+            <div>
+              <div className="summary-label">Experience</div>
+              <div className="summary-value">{user.years_experience != null ? `${user.years_experience} yrs` : 'Not set'}</div>
+            </div>
+          </div>
+
+          <div className="mini-section">
+            <div className="mini-title">Education</div>
+            <div className="mini-body">
+              {education.degree_type || education.field_of_study || education.school ? (
+                <>
+                  <div>{education.degree_type || 'Degree'} · {education.field_of_study || 'Field'}</div>
+                  <div>{education.school || 'School'}{education.graduation_year ? ` · ${education.graduation_year}` : ''}</div>
+                </>
+              ) : (
+                <div>Education not added yet.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="mini-section">
+            <div className="mini-title">Skills</div>
+            <div className="skill-tags">
+              {skills.length ? skills.map(skill => <span key={skill} className="skill-tag">{skill}</span>) : <span className="muted-empty">No skills saved yet.</span>}
+            </div>
+          </div>
+
+          <div className="mini-section">
+            <div className="mini-title">Soft skills</div>
+            <div className="skill-tags">
+              {softSkills.length ? softSkills.map(skill => <span key={skill} className="skill-tag soft">{skill}</span>) : <span className="muted-empty">No soft skills saved yet.</span>}
+            </div>
+          </div>
+
+          <div className="mini-section">
+            <div className="mini-title">Experience</div>
+            <div className="mini-body">
+              {experience.length ? experience.map((item, idx) => (
+                <div key={`${item.company ?? 'company'}-${idx}`} className="experience-row">
+                  <strong>{item.position || 'Role'}</strong>
+                  <span>{item.company || 'Company'}</span>
+                  <span>{item.start_date ? new Date(item.start_date).getFullYear() : ''}{item.end_date ? ` - ${new Date(item.end_date).getFullYear()}` : ' - Present'}</span>
+                </div>
+              )) : <div>No work experience added yet.</div>}
+            </div>
+          </div>
+
+          <div className="mini-section">
+            <div className="mini-title">Job filters</div>
+            <div className="skill-tags">
+              {Object.entries(prefs).filter(([, value]) => value).map(([key]) => (
+                <span key={key} className="skill-tag pref">{key}</span>
+              ))}
+              {!Object.keys(prefs).length && <span className="muted-empty">No preference filters saved yet.</span>}
+            </div>
           </div>
         </div>
       </section>
@@ -250,7 +340,7 @@ export default function ProfilePage({ onApplyFilter }: Props) {
                 <>
                   <div className="drop-icon"><UploadIcon /></div>
                   <p className="drop-title">Drop your résumé here</p>
-                  <p className="drop-sub">PDF only · Click or drag to upload</p>
+                  <p className="drop-sub">PDF or DOCX · Click or drag to upload</p>
                 </>
               )}
             </div>
@@ -260,7 +350,7 @@ export default function ProfilePage({ onApplyFilter }: Props) {
           <input
             ref={fileRef}
             type="file"
-            accept=".pdf"
+            accept=".pdf,.docx"
             style={{ display: 'none' }}
             onChange={handleInputChange}
           />

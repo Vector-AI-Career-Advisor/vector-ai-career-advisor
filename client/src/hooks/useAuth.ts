@@ -13,8 +13,9 @@ export function useAuth() {
     try {
       const token = await apiLogin(email, password)
       localStorage.setItem('token', token)
+      localStorage.setItem('user_email', email.trim().toLowerCase())
       sessionStorage.setItem('vector_just_logged_in', '1')
-      navigate('/jobs')
+      navigate('/onboarding')
     } catch (e: any) {
       setError(e.response?.data?.detail ?? 'Login failed')
     } finally {
@@ -30,8 +31,9 @@ export function useAuth() {
       // Auto-login after signup
       const token = await apiLogin(email, password)
       localStorage.setItem('token', token)
+      localStorage.setItem('user_email', email.trim().toLowerCase())
       sessionStorage.setItem('vector_just_logged_in', '1')
-      navigate('/jobs')
+      navigate('/onboarding')
     } catch (e: any) {
       setError(e.response?.data?.detail ?? 'Signup failed')
     } finally {
@@ -41,6 +43,7 @@ export function useAuth() {
 
   const handleLogout = () => {
     localStorage.removeItem('token')
+    localStorage.removeItem('user_email')
     navigate('/login')
   }
 

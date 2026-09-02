@@ -18,10 +18,11 @@ from fastapi.responses import JSONResponse
 from features.auth.router import router as auth_router
 from features.jobs.router import router as jobs_router
 from features.resumes.router import router as resumes_router
+from features.profile.router import router as profile_router
 from features.stats.router import router as stats_router
 from features.applications.router import router as applications_router
 from features.agents.router import router as agent_router
-from server.db.postgres import init_db
+from server.db.postgres import init_db, get_connection
 from core.exceptions import AppError, app_error_handler
 from server.web.core.logging import setup_logging
 
@@ -60,9 +61,28 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     log.info("Starting JobBoard API")
-    init_db()
+    try:
+        init_db()
+        log.info("Database initialized successfully")
+    except Exception as e:
+        log.error("Failed to initialize database: %s", str(e), exc_info=True)
+        raise
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint."""
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        conn.close()
+        return {"status": "healthy", "db": "connected"}
+    except Exception as e:
+        log.error("Health check failed: %s", str(e))
+        return {"status": "unhealthy", "db": "error", "detail": str(e)}
 
 app.include_router(auth_router,    prefix="/auth",    tags=["auth"])
+app.include_router(profile_router,  prefix="/profile",  tags=["profile"])
 app.include_router(stats_router,   prefix="/jobs",    tags=["jobs"])   # /jobs/stats — must be before jobs_router
 app.include_router(jobs_router,    prefix="/jobs",    tags=["jobs"])
 app.include_router(resumes_router,      prefix="/resumes",      tags=["resumes"])
