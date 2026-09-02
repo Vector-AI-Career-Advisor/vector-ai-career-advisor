@@ -26,13 +26,7 @@ def _parse_json_response(text: str) -> Dict[str, Any]:
         raise ValueError("Could not parse JSON from AI profile extraction response")
 
 
-def extract_profile_from_resume(resume_text: str) -> Dict[str, Any]:
-    """Extract resume-driven profile fields with a strong, constrained JSON schema."""
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-    prompt = f"""
-You are extracting structured profile data from a resume. Return only valid JSON with this schema:
-
-{
+_SCHEMA = """{
   "first_name": "string or null",
   "last_name": "string or null",
   "phone": "string or null",
@@ -50,24 +44,34 @@ You are extracting structured profile data from a resume. Return only valid JSON
   "work_experience": [
     {"position": "string or null", "company": "string or null", "start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null"}
   ]
-}
+}"""
 
-RULES:
+_INSTRUCTIONS = """RULES:
 - Only use facts that are actually in the resume.
 - Keep skill names short and standardized.
 - Do not invent employers, dates, or schools.
 - If a field is not found, use null or [] as appropriate.
 - Deduplicate skills and soft skills.
 - Limit work_experience to up to 3 entries.
-- Keep output valid JSON only, no markdown.
+- Keep output valid JSON only, no markdown."""
 
-RESUME:
-{resume_text[:8000]}
-"""
+
+def extract_profile_from_resume(resume_text: str) -> Dict[str, Any]:
+    """Extract resume-driven profile fields with a strong, constrained JSON schema."""
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    prompt = (
+        "You are extracting structured profile data from a resume. "
+        "Return only valid JSON with this schema:\n\n"
+        + _SCHEMA
+        + "\n\n"
+        + _INSTRUCTIONS
+        + "\n\nRESUME:\n"
+        + resume_text[:8000]
+    )
 
     try:
         response = client.messages.create(
-            model=os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet") ,
+            model=os.getenv("ANTHROPIC_MODEL"),
             max_tokens=1000,
             system="Extract profile data from a resume into valid JSON only.",
             messages=[{"role": "user", "content": prompt}],

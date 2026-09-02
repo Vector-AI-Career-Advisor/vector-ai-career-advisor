@@ -189,6 +189,64 @@ def init_db(conn=None) -> None:
                     updated_at  TIMESTAMP DEFAULT NOW()
                 );
             """)
+            # resumes: many-per-user, titled, exactly one active per user
+            cur.execute("ALTER TABLE resumes DROP CONSTRAINT IF EXISTS resumes_user_id_key;")
+            cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS title     TEXT;")
+            cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;")
+            cur.execute("CREATE INDEX IF NOT EXISTS resumes_user_idx ON resumes (user_id);")
+            cur.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS resumes_one_active_per_user "
+                "ON resumes (user_id) WHERE is_active;"
+            )
+            cur.execute("UPDATE resumes SET title = 'Resume ' || id WHERE title IS NULL;")
+            cur.execute("""
+                UPDATE resumes SET is_active = TRUE
+                 WHERE id IN (
+                     SELECT DISTINCT ON (user_id) id FROM resumes
+                     ORDER BY user_id, uploaded_at DESC
+                 )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM resumes r2
+                     WHERE r2.user_id = resumes.user_id AND r2.is_active
+                 );
+            """)
+
+            # resume_skills: per-résumé ATS extraction output
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS resume_skills (
+                    id         SERIAL PRIMARY KEY,
+                    resume_id  INTEGER NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+                    skill      TEXT NOT NULL,
+                    kind       TEXT NOT NULL DEFAULT 'hard',   -- 'hard' | 'soft'
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE (resume_id, skill, kind)
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS resume_skills_resume_idx ON resume_skills (resume_id);")
+
+            # user_job_core: tier 1 — hard job-search restrictions
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_job_core (
+                    user_id         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    min_experience  INTEGER,
+                    max_experience  INTEGER,
+                    education_level  TEXT,   -- none|bootcamp|associate|bachelor|master|phd (semantic hint only)
+                    updated_at      TIMESTAMP DEFAULT NOW()
+                );
+            """)
+
+            # user_job_preferences: tier 2 — soft job-search filters
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_job_preferences (
+                    user_id             INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    preferred_roles     TEXT[]  NOT NULL DEFAULT '{}',
+                    preferred_locations TEXT[]  NOT NULL DEFAULT '{}',
+                    preferred_seniority TEXT[]  NOT NULL DEFAULT '{}',
+                    remote_only         BOOLEAN NOT NULL DEFAULT FALSE,
+                    updated_at          TIMESTAMP DEFAULT NOW()
+                );
+            """)
+
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
                     id               TEXT PRIMARY KEY,

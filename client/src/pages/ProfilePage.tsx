@@ -2,10 +2,18 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import api from '../api/client'
-import { uploadResume, getMyResume, deleteResume } from '../api/resumes'
-import type { ResumeInfo } from '../api/resumes'
+import {
+  uploadResume, getMyResume, deleteResume,
+  listResumes, getResume, setActiveResume, renameResume,
+} from '../api/resumes'
+import type { ResumeInfo, ResumeListItem, ResumeDetail } from '../api/resumes'
 import type { JobFilters } from '../api/jobs'
-import { getProfileSummary, type ProfileSummary } from '../api/profile'
+import {
+  getProfileSummary, type ProfileSummary,
+  getJobCore, updateJobCore, type JobCore,
+  getJobPreferences, updateJobPreferences, type JobPreferences,
+} from '../api/profile'
+import { ROLE_OPTIONS, LOCATION_OPTIONS, SENIORITIES, EDUCATION_LEVELS, EXPERIENCE_OPTIONS } from '../constants'
 import './ProfilePage.css'
 
 // ── Saved-filter preset shape ──────────────────────────────────────────────
@@ -72,6 +80,23 @@ export default function ProfilePage({ onApplyFilter }: Props) {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [presetName, setPresetName] = useState('')
 
+  // ── Résumés (multiple) ─────────────────────────────────────────────────
+  const [resumeList, setResumeList] = useState<ResumeListItem[]>([])
+  const [resumeSkills, setResumeSkills] = useState<Record<number, ResumeDetail>>({})
+  const [expandedResume, setExpandedResume] = useState<number | null>(null)
+  const [renamingId, setRenamingId] = useState<number | null>(null)
+  const [renameText, setRenameText] = useState('')
+
+  // ── Search restrictions (tier 1) & preferences (tier 2) ────────────────
+  const [core, setCore] = useState<JobCore>({ min_experience: null, max_experience: null, education_level: null })
+  const [prefsForm, setPrefsForm] = useState<JobPreferences>({
+    preferred_roles: [], preferred_locations: [], preferred_seniority: [], remote_only: false,
+  })
+  const [coreMsg, setCoreMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [prefsMsg, setPrefsMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [savingCore, setSavingCore] = useState(false)
+  const [savingPrefs, setSavingPrefs] = useState(false)
+
   // ── Load user info ──────────────────────────────────────────────────────
   useEffect(() => {
     api.get('/auth/me')
@@ -92,12 +117,14 @@ export default function ProfilePage({ onApplyFilter }: Props) {
   const fetchResume = useCallback(async () => {
     setResumeLoading(true)
     try {
-      const [nextResume, summary] = await Promise.all([
+      const [nextResume, summary, list] = await Promise.all([
         getMyResume(),
         getProfileSummary().catch(() => null),
+        listResumes().catch(() => [] as ResumeListItem[]),
       ])
       setResume(nextResume)
       setProfileSummary(summary)
+      setResumeList(list)
     } finally {
       setResumeLoading(false)
     }
@@ -108,17 +135,92 @@ export default function ProfilePage({ onApplyFilter }: Props) {
   // ── Load presets ────────────────────────────────────────────────────────
   useEffect(() => { setPresets(loadPresets()) }, [])
 
+  // ── Load core + preferences ─────────────────────────────────────────────
+  useEffect(() => {
+    getJobCore().then(setCore).catch(() => {/* ignore */})
+    getJobPreferences().then(setPrefsForm).catch(() => {/* ignore */})
+  }, [])
+
+  const toggleResumeSkills = async (id: number) => {
+    if (expandedResume === id) { setExpandedResume(null); return }
+    setExpandedResume(id)
+    if (!resumeSkills[id]) {
+      try {
+        const detail = await getResume(id)
+        setResumeSkills(prev => ({ ...prev, [id]: detail }))
+      } catch {/* ignore */}
+    }
+  }
+
+  const handleActivateResume = async (id: number) => {
+    await setActiveResume(id)
+    await fetchResume()
+  }
+
+  const handleRenameResume = async (id: number) => {
+    const title = renameText.trim()
+    setRenamingId(null)
+    if (title) {
+      await renameResume(id, title)
+      await fetchResume()
+    }
+  }
+
+  const handleDeleteResume = async (id: number) => {
+    if (!window.confirm('Remove this résumé?')) return
+    await deleteResume(id)
+    setResumeSkills(prev => { const n = { ...prev }; delete n[id]; return n })
+    await fetchResume()
+  }
+
+  const saveCore = async () => {
+    setSavingCore(true)
+    setCoreMsg(null)
+    try {
+      const saved = await updateJobCore(core)
+      setCore(saved)
+      setCoreMsg({ type: 'ok', text: 'Search restrictions saved.' })
+    } catch {
+      setCoreMsg({ type: 'err', text: 'Could not save. Try again.' })
+    } finally {
+      setSavingCore(false)
+    }
+  }
+
+  const savePrefs = async () => {
+    setSavingPrefs(true)
+    setPrefsMsg(null)
+    try {
+      const saved = await updateJobPreferences(prefsForm)
+      setPrefsForm(saved)
+      setPrefsMsg({ type: 'ok', text: 'Job preferences saved.' })
+    } catch {
+      setPrefsMsg({ type: 'err', text: 'Could not save. Try again.' })
+    } finally {
+      setSavingPrefs(false)
+    }
+  }
+
+  const addPref = (key: 'preferred_roles' | 'preferred_locations' | 'preferred_seniority', value: string) => {
+    if (!value || prefsForm[key].includes(value)) return
+    setPrefsForm({ ...prefsForm, [key]: [...prefsForm[key], value] })
+  }
+  const removePref = (key: 'preferred_roles' | 'preferred_locations' | 'preferred_seniority', value: string) => {
+    setPrefsForm({ ...prefsForm, [key]: prefsForm[key].filter(v => v !== value) })
+  }
+
   // ── Resume upload ───────────────────────────────────────────────────────
   const handleFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setUploadMsg({ type: 'err', text: 'Only PDF files are accepted.' })
+    const name = file.name.toLowerCase()
+    if (!name.endsWith('.pdf') && !name.endsWith('.docx')) {
+      setUploadMsg({ type: 'err', text: 'Only PDF or DOCX files are accepted.' })
       return
     }
     setUploading(true)
     setUploadMsg(null)
     try {
       await uploadResume(file)
-      setUploadMsg({ type: 'ok', text: 'Resume uploaded successfully!' })
+      setUploadMsg({ type: 'ok', text: 'Résumé uploaded — it is now your active résumé.' })
       await fetchResume()
     } catch {
       setUploadMsg({ type: 'err', text: 'Upload failed. Please try again.' })
@@ -277,76 +379,210 @@ export default function ProfilePage({ onApplyFilter }: Props) {
         </div>
       </section>
 
-      {/* ── Resume ─────────────────────────────────────────────────── */}
+      {/* ── Search restrictions (tier 1: core) ─────────────────────── */}
       <section className="profile-section">
-        <SectionHeader title="Resume" badge={resume ? 'On file' : 'None'} active={!!resume} />
+        <SectionHeader title="Search restrictions" badge="Core" active />
+        <div className="profile-card">
+          <p className="card-hint">Hard limits — jobs outside these are excluded from your matches.</p>
+          <div className="core-grid">
+            <label className="field">
+              <span className="field-label">Min years experience</span>
+              <select
+                className="pref-select"
+                value={core.min_experience ?? ''}
+                onChange={e => setCore({ ...core, min_experience: e.target.value === '' ? null : Number(e.target.value) })}
+              >
+                {EXPERIENCE_OPTIONS.map(o => <option key={`min${o.label}`} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">Max years experience</span>
+              <select
+                className="pref-select"
+                value={core.max_experience ?? ''}
+                onChange={e => setCore({ ...core, max_experience: e.target.value === '' ? null : Number(e.target.value) })}
+              >
+                {EXPERIENCE_OPTIONS.map(o => <option key={`max${o.label}`} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">Education level</span>
+              <select
+                className="pref-select"
+                value={core.education_level ?? ''}
+                onChange={e => setCore({ ...core, education_level: e.target.value || null })}
+              >
+                {EDUCATION_LEVELS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="save-row">
+            <button className="btn-modal-save" onClick={saveCore} disabled={savingCore}>
+              {savingCore ? 'Saving…' : 'Save restrictions'}
+            </button>
+            {coreMsg && (
+              <span className={`upload-msg upload-msg-${coreMsg.type}`}>
+                {coreMsg.type === 'ok' ? <CheckIcon /> : <WarnIcon />}{coreMsg.text}
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Job preferences (tier 2) ───────────────────────────────── */}
+      <section className="profile-section">
+        <SectionHeader title="Job preferences" badge="Soft" active />
+        <div className="profile-card">
+          <p className="card-hint">Soft filters — used to rank and filter, relaxed automatically when too few jobs match.</p>
+
+          <ChipSelect
+            label="Preferred roles" options={ROLE_OPTIONS} selected={prefsForm.preferred_roles}
+            onAdd={v => addPref('preferred_roles', v)} onRemove={v => removePref('preferred_roles', v)}
+          />
+          <ChipSelect
+            label="Preferred locations" options={LOCATION_OPTIONS} selected={prefsForm.preferred_locations}
+            onAdd={v => addPref('preferred_locations', v)} onRemove={v => removePref('preferred_locations', v)}
+          />
+          <ChipSelect
+            label="Preferred seniority" options={SENIORITIES} selected={prefsForm.preferred_seniority}
+            onAdd={v => addPref('preferred_seniority', v)} onRemove={v => removePref('preferred_seniority', v)}
+          />
+
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={prefsForm.remote_only}
+              onChange={e => setPrefsForm({ ...prefsForm, remote_only: e.target.checked })}
+            />
+            <span>Remote only</span>
+          </label>
+
+          <div className="save-row">
+            <button className="btn-modal-save" onClick={savePrefs} disabled={savingPrefs}>
+              {savingPrefs ? 'Saving…' : 'Save preferences'}
+            </button>
+            {prefsMsg && (
+              <span className={`upload-msg upload-msg-${prefsMsg.type}`}>
+                {prefsMsg.type === 'ok' ? <CheckIcon /> : <WarnIcon />}{prefsMsg.text}
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Résumés (tier 3: skills) ───────────────────────────────── */}
+      <section className="profile-section">
+        <SectionHeader
+          title="Résumés"
+          badge={resumeList.length ? `${resumeList.length}` : 'None'}
+          active={resumeList.length > 0}
+        />
 
         <div className="profile-card">
+          <p className="card-hint">
+            Skills are extracted from each résumé. Your <strong>active</strong> résumé drives job
+            matching, cover letters, and résumé tailoring.
+          </p>
+
           {resumeLoading ? (
-            <div className="profile-loading">
-              <div className="spinner" />
-              <span>Loading resume…</span>
-            </div>
-          ) : resume ? (
-            <div className="resume-info">
-              <div className="resume-file-icon">
-                <PdfIcon />
-              </div>
-              <div className="resume-details">
-                <p className="resume-filename">{resume.filename}</p>
-                <div className="resume-dates">
-                  <span>Uploaded {fmt(resume.uploaded_at)}</span>
-                  {resume.updated_at !== resume.uploaded_at && (
-                    <span>· Updated {fmt(resume.updated_at)}</span>
-                  )}
-                </div>
-              </div>
-              <div className="resume-actions">
-                <button
-                  className="btn-replace"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                >
-                  Replace
-                </button>
-                <button
-                  className="btn-delete-resume"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  aria-label="Delete resume"
-                >
-                  <TrashIcon />
-                </button>
-              </div>
-            </div>
+            <div className="profile-loading"><div className="spinner" /><span>Loading résumés…</span></div>
           ) : (
-            /* Drop zone */
-            <div
-              className={`drop-zone ${dragging ? 'dragging' : ''} ${uploading ? 'uploading' : ''}`}
-              onDragOver={e => { e.preventDefault(); setDragging(true) }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={handleDrop}
-              onClick={() => !uploading && fileRef.current?.click()}
-              role="button"
-              tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && fileRef.current?.click()}
-            >
-              {uploading ? (
-                <>
-                  <div className="spinner" />
-                  <p className="drop-title">Uploading…</p>
-                </>
-              ) : (
-                <>
-                  <div className="drop-icon"><UploadIcon /></div>
-                  <p className="drop-title">Drop your résumé here</p>
-                  <p className="drop-sub">PDF or DOCX · Click or drag to upload</p>
-                </>
-              )}
-            </div>
+            <ul className="resume-list">
+              {resumeList.map(r => (
+                <li key={r.id} className={`resume-list-item ${r.is_active ? 'is-active' : ''}`}>
+                  <div className="resume-list-main">
+                    <div className="resume-file-icon"><PdfIcon /></div>
+                    <div className="resume-details">
+                      {renamingId === r.id ? (
+                        <input
+                          className="modal-input"
+                          value={renameText}
+                          autoFocus
+                          onChange={e => setRenameText(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleRenameResume(r.id)}
+                          onBlur={() => handleRenameResume(r.id)}
+                        />
+                      ) : (
+                        <p className="resume-filename">
+                          {r.title || r.filename}
+                          {r.is_active && <span className="resume-active-badge">Active</span>}
+                        </p>
+                      )}
+                      <div className="resume-dates">
+                        <span>{r.filename}</span>
+                        <span>· {fmt(r.uploaded_at)}</span>
+                        <span>· {r.skill_count} skills</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="resume-actions">
+                    {!r.is_active && (
+                      <button className="btn-replace" onClick={() => handleActivateResume(r.id)}>
+                        Make active
+                      </button>
+                    )}
+                    <button className="btn-replace" onClick={() => toggleResumeSkills(r.id)}>
+                      {expandedResume === r.id ? 'Hide skills' : 'Skills'}
+                    </button>
+                    <button
+                      className="btn-replace"
+                      onClick={() => { setRenamingId(r.id); setRenameText(r.title || '') }}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      className="btn-delete-resume"
+                      onClick={() => handleDeleteResume(r.id)}
+                      aria-label="Delete résumé"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                  {expandedResume === r.id && (
+                    <div className="resume-skill-panel">
+                      <div className="mini-title">Extracted skills</div>
+                      <div className="skill-tags">
+                        {resumeSkills[r.id]?.skills.length
+                          ? resumeSkills[r.id].skills.map(s => <span key={s} className="skill-tag">{s}</span>)
+                          : <span className="muted-empty">No skills extracted.</span>}
+                      </div>
+                      {!!resumeSkills[r.id]?.soft_skills.length && (
+                        <>
+                          <div className="mini-title" style={{ marginTop: '.6rem' }}>Soft skills</div>
+                          <div className="skill-tags">
+                            {resumeSkills[r.id].soft_skills.map(s => <span key={s} className="skill-tag soft">{s}</span>)}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
 
-          {/* Hidden file input */}
+          {/* Drop zone — always available to add another résumé */}
+          <div
+            className={`drop-zone ${dragging ? 'dragging' : ''} ${uploading ? 'uploading' : ''}`}
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => !uploading && fileRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && fileRef.current?.click()}
+          >
+            {uploading ? (
+              <><div className="spinner" /><p className="drop-title">Uploading…</p></>
+            ) : (
+              <>
+                <div className="drop-icon"><UploadIcon /></div>
+                <p className="drop-title">Add a résumé</p>
+                <p className="drop-sub">PDF or DOCX · Click or drag to upload</p>
+              </>
+            )}
+          </div>
+
           <input
             ref={fileRef}
             type="file"
@@ -355,19 +591,10 @@ export default function ProfilePage({ onApplyFilter }: Props) {
             onChange={handleInputChange}
           />
 
-          {/* Upload feedback */}
           {uploadMsg && (
             <div className={`upload-msg upload-msg-${uploadMsg.type}`}>
               {uploadMsg.type === 'ok' ? <CheckIcon /> : <WarnIcon />}
               {uploadMsg.text}
-            </div>
-          )}
-
-          {/* Replace drop zone shown when resume exists and replace was clicked */}
-          {resume && uploading && (
-            <div className="drop-zone uploading" style={{ marginTop: '1rem' }}>
-              <div className="spinner" />
-              <p className="drop-title">Uploading…</p>
             </div>
           )}
         </div>
@@ -478,6 +705,39 @@ function SectionHeader({ title, badge, active }: { title: string; badge: string;
 
 function Tag({ label, color }: { label: string; color: 'purple' | 'blue' | 'green' }) {
   return <span className={`preset-tag preset-tag-${color}`}>{label}</span>
+}
+
+function ChipSelect({
+  label, options, selected, onAdd, onRemove,
+}: {
+  label: string
+  options: string[]
+  selected: string[]
+  onAdd: (v: string) => void
+  onRemove: (v: string) => void
+}) {
+  return (
+    <div className="field">
+      <span className="field-label">{label}</span>
+      <div className="skill-tags">
+        {selected.map(v => (
+          <span key={v} className="skill-tag pref">
+            {v}
+            <button className="chip-remove" onClick={() => onRemove(v)} aria-label={`Remove ${v}`}>×</button>
+          </span>
+        ))}
+        {!selected.length && <span className="muted-empty">None selected.</span>}
+      </div>
+      <select
+        className="pref-select"
+        value=""
+        onChange={e => { onAdd(e.target.value); e.currentTarget.value = '' }}
+      >
+        <option value="">Add {label.toLowerCase()}…</option>
+        {options.filter(o => !selected.includes(o)).map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  )
 }
 
 // ── Icons ───────────────────────────────────────────────────────────────────

@@ -34,6 +34,15 @@ def _collection():
     return _chroma_collection
 
 
+_context: dict = {"user_id": None}
+
+
+def set_current_user(user_id: int) -> None:
+    """Set the authenticated user for user-scoped DB tools (e.g. find_jobs_for_me).
+    Mirrors resume_tools._context — set once per request in the agents router."""
+    _context["user_id"] = user_id
+
+
 def _run_query(sql: str, params: tuple = (), description: str = ""):
     """Safely runs SQL using parameterised queries to prevent SQL injection."""
     conn = _conn()
@@ -63,6 +72,74 @@ def semantic_search_jobs(query: str, n_results: int = 5):
         return {"jobs": [], "note": "Semantic search unavailable; use search_jobs_by_criteria instead."}
 
     job_ids = [h["metadata"]["job_id"] for h in hits]
+
+    conn = _conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, title, company, role, location, url, description FROM jobs WHERE id = ANY(%s)",
+                (job_ids,),
+            )
+            rows = {r["id"]: dict(r) for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+    return {"jobs": [rows[jid] for jid in job_ids if jid in rows]}
+
+
+@tool
+def find_jobs_for_me(n_results: int = 8):
+    """Find jobs matching the CURRENT USER's saved job profile — their core restrictions
+    (min/max years experience), soft preferences (roles, locations, seniority, remote),
+    and the skills extracted from their active résumé.
+
+    Takes no search terms: it reads the stored profile. Prefer this over
+    semantic_search_jobs whenever the request is personal ("jobs for me", "roles that fit
+    me", "match my skills / résumé / profile") and the user did NOT name an explicit role,
+    company, or location. Core restrictions hard-exclude; preferences are relaxed if too
+    few jobs match; skills order the results. Returns {"jobs": [...]} or
+    {"jobs": [], "note": ...} when no profile is on file.
+    """
+    from server.web.features.profile import job_matching
+
+    user_id = _context.get("user_id")
+    if not user_id:
+        return {"jobs": [], "note": "No user session active."}
+
+    profile = job_matching.build_job_search_profile(user_id)
+    if not job_matching.has_signal(profile):
+        return {"jobs": [], "note": "No job profile on file. Ask the user to set their "
+                "preferences/résumé on the profile page, or use semantic_search_jobs."}
+
+    try:
+        collection = _collection()
+        hits = chroma_search(
+            collection,
+            job_matching.query_text(profile),
+            n_results=max(n_results * 6, 30),
+            where={"type": "full"},
+        )
+    except Exception as e:
+        log.warning("ChromaDB unavailable, find_jobs_for_me skipped: %s", e)
+        return {"jobs": [], "note": "Semantic search unavailable; use search_jobs_by_criteria instead."}
+
+    core = profile["core"]
+    skills = profile["skills"]
+    hits = [h for h in hits if job_matching.matches_core(h.get("metadata", {}), core)]
+    hits = job_matching.apply_preferences(hits, profile["preferences"], n_results)
+    hits.sort(key=lambda h: job_matching.skill_rank(h.get("metadata", {}), skills), reverse=True)
+
+    seen, job_ids = set(), []
+    for h in hits:
+        jid = h.get("metadata", {}).get("job_id")
+        if jid and jid not in seen:
+            seen.add(jid)
+            job_ids.append(jid)
+        if len(job_ids) >= n_results:
+            break
+
+    if not job_ids:
+        return {"jobs": [], "note": "No jobs matched the user's restrictions."}
 
     conn = _conn()
     try:
@@ -212,6 +289,7 @@ def top_skills_all(limit: int = 15):
 
 DB_TOOLS = [
     semantic_search_jobs,
+    find_jobs_for_me,
     get_job_details,
     get_job_aggregate,
     get_column_distribution,

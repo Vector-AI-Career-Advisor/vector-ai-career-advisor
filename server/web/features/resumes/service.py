@@ -1,6 +1,7 @@
 import io
 import logging
 import zipfile
+from typing import Optional
 from xml.etree import ElementTree as ET
 
 from fastapi import HTTPException, UploadFile
@@ -45,10 +46,30 @@ async def upload_resume(user_id: int, file: UploadFile) -> dict:
         log.warning("Resume upload rejected for user %s — no extractable text: %s", user_id, file.filename)
         raise HTTPException(status_code=400, detail=f"Could not extract text from {kind}")
 
-    repository.save_resume(user_id, file.filename, text)
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT career_stage FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+            career_stage = row[0] if row else None
+    finally:
+        conn.close()
+
+    title = repository.next_resume_title(user_id, career_stage)
+    resume_id = repository.create_resume(user_id, file.filename, text, title)
+    repository.set_active_resume(user_id, resume_id)
 
     try:
         extracted = extract_profile_from_resume(text)
+
+        # tier-3 skills are résumé-specific
+        repository.replace_resume_skills(
+            resume_id,
+            extracted.get("skills") or [],
+            extracted.get("soft_skills") or [],
+        )
+
+        # profile-level backfill (user-level, not résumé-level)
         conn = get_connection()
         with conn.cursor() as cur:
             if extracted.get("first_name") or extracted.get("last_name"):
@@ -82,18 +103,6 @@ async def upload_resume(user_id: int, file: UploadFile) -> dict:
                     ),
                 )
 
-            for skill in extracted.get("skills") or []:
-                cur.execute(
-                    "INSERT INTO user_skills (user_id, skill, category) VALUES (%s, %s, %s) ON CONFLICT (user_id, skill) DO NOTHING",
-                    (user_id, skill, "resume"),
-                )
-
-            for skill in extracted.get("soft_skills") or []:
-                cur.execute(
-                    "INSERT INTO user_soft_skills (user_id, skill) VALUES (%s, %s) ON CONFLICT (user_id, skill) DO NOTHING",
-                    (user_id, skill),
-                )
-
             for exp in extracted.get("work_experience") or []:
                 cur.execute(
                     """
@@ -118,8 +127,9 @@ async def upload_resume(user_id: int, file: UploadFile) -> dict:
         except Exception:
             pass
 
-    log.info("Resume uploaded for user %s: %s", user_id, file.filename)
-    return {"message": "Resume uploaded successfully", "filename": file.filename}
+    log.info("Resume uploaded for user %s: %s (resume_id=%s)", user_id, file.filename, resume_id)
+    return {"message": "Resume uploaded successfully", "filename": file.filename,
+            "resume_id": resume_id, "title": title}
 
 
 def get_my_resume(user_id: int) -> dict:
@@ -129,5 +139,28 @@ def get_my_resume(user_id: int) -> dict:
     return resume
 
 
-def delete_my_resume(user_id: int) -> None:
-    repository.delete_resume(user_id)
+def list_my_resumes(user_id: int) -> list:
+    return repository.list_resumes(user_id)
+
+
+def get_resume_detail(user_id: int, resume_id: int) -> dict:
+    resume = repository.get_resume(user_id, resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    resume.update(repository.get_resume_skills(resume_id))
+    return resume
+
+
+def update_resume(user_id: int, resume_id: int, title: Optional[str], is_active: Optional[bool]) -> dict:
+    if repository.get_resume(user_id, resume_id) is None:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    if title is not None:
+        repository.rename_resume(user_id, resume_id, title)
+    if is_active:
+        repository.set_active_resume(user_id, resume_id)
+    return get_resume_detail(user_id, resume_id)
+
+
+def delete_my_resume(user_id: int, resume_id: Optional[int] = None) -> None:
+    if not repository.delete_resume(user_id, resume_id):
+        raise HTTPException(status_code=404, detail="Resume not found")

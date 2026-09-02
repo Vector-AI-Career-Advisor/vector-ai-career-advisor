@@ -15,7 +15,8 @@ export function useAuth() {
       localStorage.setItem('token', token)
       localStorage.setItem('user_email', email.trim().toLowerCase())
       sessionStorage.setItem('vector_just_logged_in', '1')
-      navigate('/onboarding')
+      // Returning user — onboarding never re-appears after signup.
+      navigate('/jobs')
     } catch (e: any) {
       setError(e.response?.data?.detail ?? 'Login failed')
     } finally {
@@ -33,6 +34,7 @@ export function useAuth() {
       localStorage.setItem('token', token)
       localStorage.setItem('user_email', email.trim().toLowerCase())
       sessionStorage.setItem('vector_just_logged_in', '1')
+      // New account — onboarding shows once here and is skippable.
       navigate('/onboarding')
     } catch (e: any) {
       setError(e.response?.data?.detail ?? 'Signup failed')

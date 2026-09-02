@@ -9,10 +9,10 @@ import AgentChat from '../components/AgentChat'
 import StatsPage from './StatsPage'
 import ProfilePage, { savePreset, loadPresets, FilterPreset } from './ProfilePage'
 import ApplicationsPage from './ApplicationsPage'
-import ThemeToggle from '../components/ThemeToggle'  
+import ThemeToggle from '../components/ThemeToggle'
+import { SENIORITIES, ROLE_OPTIONS, LOCATION_OPTIONS } from '../constants'
 import './JobsPage.css'
 
-const SENIORITIES = ['Junior', 'Mid', 'Senior', 'Lead', 'Staff', 'Principal']
 const POSTED_DATE_OPTIONS = [
   { value: '', label: 'Anytime' },
   { value: 'last_24h', label: 'Last 24 hours' },
@@ -29,33 +29,6 @@ const YEARS_OF_EXP_OPTIONS = [
   { value: 3, label: '3+ years' },
   { value: 5, label: '5+ years' },
   { value: 10, label: '10+ years' },
-]
-const ROLE_OPTIONS = [
-  'Frontend',
-  'Backend',
-  'Fullstack',
-  'AI / ML',
-  'Data Scientist',
-  'Data Engineer',
-  'Data Analyst',
-  'DevOps / Cloud',
-  'Mobile',
-  'QA / Automation',
-  'Security',
-  'Embedded / Firmware',
-  'Solutions Architect',
-  'Team Lead',
-  'Software Development',
-  'Product Manager',
-  'Other',
-]
-const LOCATION_OPTIONS = [
-  'Center',
-  'Hashrom',
-  'South',
-  'North',
-  'Shfela',
-  'Remote',
 ]
 const LIMIT = 50
 

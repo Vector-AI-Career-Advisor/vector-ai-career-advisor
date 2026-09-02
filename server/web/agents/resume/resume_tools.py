@@ -18,6 +18,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 from server.db import get_connection
+from server.web.features.resumes import repository as resume_repo
 
 _context: dict = {"user_id": None}
 
@@ -211,7 +212,11 @@ def generate_cover_letter_for_job(user_id: int, job_id: str) -> dict:
     conn = _conn()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT content FROM resumes WHERE user_id = %s", (user_id,))
+            cur.execute(
+                "SELECT content FROM resumes WHERE user_id = %s "
+                "ORDER BY is_active DESC, uploaded_at DESC LIMIT 1",
+                (user_id,),
+            )
             resume_row = cur.fetchone()
             if not resume_row:
                 return {"error": "No resume on file. Please upload a PDF resume first."}
@@ -279,7 +284,11 @@ def generate_tailored_resume_for_job(user_id: int, job_id: str) -> dict:
     conn = _conn()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT content FROM resumes WHERE user_id = %s", (user_id,))
+            cur.execute(
+                "SELECT content FROM resumes WHERE user_id = %s "
+                "ORDER BY is_active DESC, uploaded_at DESC LIMIT 1",
+                (user_id,),
+            )
             resume_row = cur.fetchone()
             if not resume_row:
                 return {"error": "No resume on file. Please upload a PDF resume first."}
@@ -387,22 +396,17 @@ def upload_resume(path: str) -> dict:
     conn = _conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO resumes (user_id, filename, content)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (user_id) DO UPDATE
-                    SET filename = EXCLUDED.filename,
-                        content = EXCLUDED.content,
-                        updated_at = NOW()
-                """,
-                (user_id, filename, text),
-            )
-        conn.commit()
+            cur.execute("SELECT career_stage FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+            career_stage = row[0] if row else None
     finally:
         conn.close()
 
-    return {"message": f"Resume '{filename}' uploaded successfully."}
+    title = resume_repo.next_resume_title(user_id, career_stage)
+    resume_id = resume_repo.create_resume(user_id, filename, text, title)
+    resume_repo.set_active_resume(user_id, resume_id)
+
+    return {"message": f"Resume '{filename}' uploaded successfully as '{title}'."}
 
 
 @tool
@@ -416,7 +420,8 @@ def get_user_resume() -> dict:
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT filename, content, updated_at FROM resumes WHERE user_id = %s",
+                "SELECT filename, content, updated_at FROM resumes WHERE user_id = %s "
+                "ORDER BY is_active DESC, uploaded_at DESC LIMIT 1",
                 (user_id,),
             )
             row = cur.fetchone()

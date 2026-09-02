@@ -155,3 +155,38 @@ export const checkOnboardingStatus = async (): Promise<any> => {
   const { data } = await api.get('/profile/onboarding-status')
   return data
 }
+
+// ── Job-search profile: core (tier 1) & preferences (tier 2) ────────────────
+
+export interface JobCore {
+  min_experience: number | null
+  max_experience: number | null
+  education_level: string | null
+}
+
+export interface JobPreferences {
+  preferred_roles: string[]
+  preferred_locations: string[]
+  preferred_seniority: string[]
+  remote_only: boolean
+}
+
+export const getJobCore = async (): Promise<JobCore> => {
+  const { data } = await api.get('/profile/job-core')
+  return data
+}
+
+export const updateJobCore = async (data: JobCore): Promise<JobCore> => {
+  const { data: response } = await api.put('/profile/job-core', data)
+  return response
+}
+
+export const getJobPreferences = async (): Promise<JobPreferences> => {
+  const { data } = await api.get('/profile/job-preferences')
+  return data
+}
+
+export const updateJobPreferences = async (data: JobPreferences): Promise<JobPreferences> => {
+  const { data: response } = await api.put('/profile/job-preferences', data)
+  return response
+}

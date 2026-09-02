@@ -4,8 +4,10 @@ from features.profile import service
 from features.profile.schemas import (
     BasicInfoRequest, CareerStageRequest, EducationRequest, SkillRequest,
     SoftSkillRequest, LanguageRequest, WorkExperienceRequest, CertificationRequest,
-    VolunteeringRequest, ClubOrgRequest, PreferencesRequest, OnboardingStatusResponse
+    VolunteeringRequest, ClubOrgRequest, PreferencesRequest, OnboardingStatusResponse,
+    JobCoreRequest, JobPreferencesRequest
 )
+from server.web.features.profile import job_matching
 
 router = APIRouter()
 
@@ -119,6 +121,33 @@ def add_club_org(data: ClubOrgRequest, user_id: str = Depends(get_current_user))
 @router.post("/preferences")
 def update_preferences(data: PreferencesRequest, user_id: str = Depends(get_current_user)):
     return service.update_preferences(int(user_id), data)
+
+
+# ── Job-search profile: core (tier 1) & preferences (tier 2) ────────────────
+
+@router.get("/job-core")
+def get_job_core(user_id: str = Depends(get_current_user)):
+    return job_matching.get_job_core(int(user_id))
+
+
+@router.put("/job-core")
+def put_job_core(data: JobCoreRequest, user_id: str = Depends(get_current_user)):
+    return job_matching.update_job_core(int(user_id), data.model_dump())
+
+
+@router.get("/job-preferences")
+def get_job_preferences(user_id: str = Depends(get_current_user)):
+    return job_matching.get_job_preferences(int(user_id))
+
+
+@router.put("/job-preferences")
+def put_job_preferences(data: JobPreferencesRequest, user_id: str = Depends(get_current_user)):
+    return job_matching.update_job_preferences(int(user_id), data.model_dump())
+
+
+@router.get("/job-search-profile")
+def get_job_search_profile(user_id: str = Depends(get_current_user)):
+    return job_matching.build_job_search_profile(int(user_id))
 
 
 # ── Complete Profile ────────────────────────────────────────────────────────

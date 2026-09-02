@@ -19,6 +19,7 @@ COUNTING RULES:
 
 TOOLS AVAILABLE:
 - semantic_search_jobs     → natural-language job search
+- find_jobs_for_me         → personalized search from the user's SAVED profile (core experience limits + preferred roles/locations/seniority/remote + active-résumé skills). Takes no query. Use it — not semantic_search_jobs — when the request is personal ("jobs for me", "roles that fit me", "match my skills / résumé / profile") AND the user named no explicit role, company, or location. If it returns no jobs and a note that nothing is saved, fall back to semantic_search_jobs.
 - get_job_aggregate        → COUNT / AVG / MIN / MAX stats
 - get_column_distribution  → top-N breakdowns (companies, roles, seniority)
 - search_jobs_by_criteria  → filter by role, location, company, max experience
