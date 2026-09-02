@@ -207,6 +207,29 @@ def _save_pdf(text: str, filepath: str) -> None:
     doc.build(story)
 
 
+_CLOSINGS = (
+    "sincerely", "best regards", "kind regards", "warm regards", "regards",
+    "best", "respectfully", "yours truly", "yours sincerely", "thank you",
+)
+
+
+def _append_signature(letter: str, name: str) -> str:
+    """Make sure the letter ends with the candidate's real name."""
+    if not name:
+        return letter
+    body = letter.rstrip()
+    lines = body.split("\n")
+    last = lines[-1].strip()
+    # LLM left a placeholder like "[Your Name]" — swap in the real name.
+    if last.startswith("[") and last.endswith("]"):
+        lines[-1] = name
+        return "\n".join(lines)
+    # A closing line is already there ("Sincerely," etc.) — just add the name.
+    if last.rstrip(",").lower() in _CLOSINGS:
+        return f"{body}\n{name}"
+    return f"{body}\n\nSincerely,\n{name}"
+
+
 def generate_cover_letter_for_job(user_id: int, job_id: str) -> dict:
     """Generate a cover letter using the user's resume and a stored job posting."""
     conn = _conn()
@@ -220,6 +243,8 @@ def generate_cover_letter_for_job(user_id: int, job_id: str) -> dict:
             resume_row = cur.fetchone()
             if not resume_row:
                 return {"error": "No resume on file. Please upload a PDF resume first."}
+            cur.execute("SELECT first_name, last_name FROM users WHERE id = %s", (user_id,))
+            user_row = cur.fetchone() or {}
             cur.execute(
                 "SELECT title, company, description, skills_must, skills_nice FROM jobs WHERE id = %s",
                 (job_id,),
@@ -241,6 +266,12 @@ def generate_cover_letter_for_job(user_id: int, job_id: str) -> dict:
         client, resume_row["content"], job_title, job_company,
         skills_must, skills_nice, job_row["description"] or "",
     )
+
+    full_name = " ".join(
+        p for p in [(user_row.get("first_name") or "").strip(),
+                    (user_row.get("last_name") or "").strip()] if p
+    )
+    cover_letter = _append_signature(cover_letter, full_name)
 
     skill_gaps = ""
     gap_prompt = textwrap.dedent(f"""

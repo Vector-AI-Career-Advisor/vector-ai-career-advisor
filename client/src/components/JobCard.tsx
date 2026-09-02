@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Job } from '../api/jobs'
 import './JobCard.css'
 
@@ -6,20 +7,14 @@ interface Props {
   onClick: () => void
 }
 
-const seniorityColor: Record<string, string> = {
-  junior:     'tag-green',
-  mid:        'tag-blue',
-  senior:     'tag-purple',
-  lead:       'tag-orange',
-  staff:      'tag-orange',
-  principal:  'tag-red',
+function isValidDate(dateStr?: string): boolean {
+  return !!dateStr && !Number.isNaN(new Date(dateStr).getTime())
 }
 
 function timeAgo(dateStr?: string): string {
-  if (!dateStr) return ''
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const days = Math.floor(diff / 86400000)
-  if (days === 0) return 'Today'
+  if (!isValidDate(dateStr)) return ''
+  const days = Math.floor((Date.now() - new Date(dateStr as string).getTime()) / 86400000)
+  if (days <= 0) return 'Today'
   if (days === 1) return 'Yesterday'
   if (days < 7) return `${days}d ago`
   if (days < 30) return `${Math.floor(days / 7)}w ago`
@@ -27,29 +22,36 @@ function timeAgo(dateStr?: string): string {
 }
 
 export default function JobCard({ job, onClick }: Props) {
-  const senClass = seniorityColor[job.seniority?.toLowerCase() ?? ''] ?? 'tag-default'
   const initials = (job.company ?? '?').slice(0, 2).toUpperCase()
+  const [logoBroken, setLogoBroken] = useState(false)
 
   return (
     <article className="job-card" onClick={onClick} tabIndex={0}
       onKeyDown={e => e.key === 'Enter' && onClick()}>
-      {/* Company avatar */}
-      <div className="job-avatar" aria-hidden="true">{initials}</div>
+      {/* Company logo, falling back to initials */}
+      {job.logo_url && !logoBroken ? (
+        <img className="job-logo" src={job.logo_url} alt="" aria-hidden="true"
+          onError={() => setLogoBroken(true)} />
+      ) : (
+        <div className="job-avatar" aria-hidden="true">{initials}</div>
+      )}
 
       <div className="job-body">
         <div className="job-meta-top">
           <span className="job-company">{job.company ?? 'Unknown'}</span>
-          <span className="job-posted">{timeAgo(job.scraped_at)}</span>
+          <span className="job-posted">
+            {timeAgo(isValidDate(job.posted_at) ? job.posted_at : job.scraped_at)}
+          </span>
         </div>
 
         <h3 className="job-title">{job.title ?? 'Untitled Role'}</h3>
 
-        <div className="job-tags">
+        <div className="job-meta-line">
           {job.seniority && (
-            <span className={`tag ${senClass}`}>{job.seniority}</span>
+            <span className="job-meta-item">{job.seniority}</span>
           )}
           {job.location && (
-            <span className="tag tag-location">
+            <span className="job-meta-item">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/>
@@ -59,7 +61,7 @@ export default function JobCard({ job, onClick }: Props) {
             </span>
           )}
           {job.yearsexperience != null && (
-            <span className="tag tag-default">{job.yearsexperience}yr exp</span>
+            <span className="job-meta-item">{job.yearsexperience}yr exp</span>
           )}
         </div>
 

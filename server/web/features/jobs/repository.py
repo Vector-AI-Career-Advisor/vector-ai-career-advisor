@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import datetime, timedelta
-from server.db.postgres import get_connection
+from server.db.postgres import get_connection, _apply_stored_logo
 
 LIMIT = 50
 
@@ -82,15 +82,20 @@ def list_jobs(
         where = ("WHERE " + " AND ".join(filters)) if filters else ""
         params += [limit, offset]
 
+        # every filter clause in `where` references jobs columns only, none of
+        # which collide with company_logos, so they need no table qualifier.
         with conn.cursor() as cur:
             cur.execute(f"""
                 SELECT COUNT(*) OVER() AS total_count,
-                       id, title, role, seniority, company, location, url,
-                       description, skills_must, skills_nice, yearsexperience,
-                       past_experience, keyword, source, posted_at, scraped_at,logo_url
-                FROM jobs
+                       j.id, j.title, j.role, j.seniority, j.company, j.location, j.url,
+                       j.description, j.skills_must, j.skills_nice, j.yearsexperience,
+                       j.past_experience, j.keyword, j.source, j.posted_at, j.scraped_at,
+                       cl.logo_path
+                FROM jobs j
+                LEFT JOIN company_logos cl
+                       ON cl.company_slug = j.company_slug AND cl.status = 'ok'
                 {where}
-                ORDER BY scraped_at DESC
+                ORDER BY j.scraped_at DESC
                 LIMIT %s OFFSET %s;
             """, params)
 
@@ -105,6 +110,7 @@ def list_jobs(
             for row in rows:
                 row_dict = dict(zip(cols, row))
                 row_dict.pop("total_count")
+                _apply_stored_logo(row_dict)
                 items.append(row_dict)
 
             return {"items": items, "total": total}
@@ -117,16 +123,22 @@ def get_job(job_id: str) -> Optional[dict]:
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, title, role, seniority, company, location, url,
-                       description, skills_must, skills_nice, yearsexperience,
-                       past_experience, keyword, source, posted_at, scraped_at,logo_url
-                FROM jobs WHERE id = %s
+                SELECT j.id, j.title, j.role, j.seniority, j.company, j.location, j.url,
+                       j.description, j.skills_must, j.skills_nice, j.yearsexperience,
+                       j.past_experience, j.keyword, j.source, j.posted_at, j.scraped_at,
+                       cl.logo_path
+                FROM jobs j
+                LEFT JOIN company_logos cl
+                       ON cl.company_slug = j.company_slug AND cl.status = 'ok'
+                WHERE j.id = %s
             """, (job_id,))
             row = cur.fetchone()
             if not row:
                 return None
 
             cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            row_dict = dict(zip(cols, row))
+            _apply_stored_logo(row_dict)
+            return row_dict
     finally:
         conn.close()

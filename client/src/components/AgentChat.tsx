@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { Job, fetchJob } from '../api/jobs'
-import { uploadResume, getMyResume, generateCoverLetter, generateTailoredResume } from '../api/resumes'
+import {
+  generateCoverLetter,
+  generateTailoredResume,
+  listResumes,
+  setActiveResume,
+  ResumeListItem,
+} from '../api/resumes'
 import { getLoginRecommendation } from '../api/agents'
 import './AgentChat.css'
 
@@ -21,6 +27,46 @@ function SimpleMarkdown({ children }: { children: string }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />
 }
 
+// ─── Typewriter reveal — renders text word-by-word like a streaming LLM chat ──
+function TypewriterMarkdown({
+  text,
+  animate,
+  onProgress,
+}: {
+  text: string
+  animate: boolean
+  onProgress?: () => void
+}) {
+  // ["word", " ", "word", "\n", …] — whitespace is kept as its own token so
+  // slicing + join reproduces the original string exactly.
+  const tokensRef = useRef<string[]>(text.split(/(\s+)/))
+  const [count, setCount] = useState(animate ? 0 : tokensRef.current.length)
+
+  useEffect(() => {
+    if (!animate) return
+    const total = tokensRef.current.length
+    // Reveal faster for long replies so they always finish in ~3s.
+    const step = Math.max(2, Math.ceil(total / 120))
+    const id = setInterval(() => {
+      setCount(c => {
+        const next = Math.min(c + step, total)
+        if (next >= total) clearInterval(id)
+        return next
+      })
+    }, 28)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    onProgress?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count])
+
+  const shown = tokensRef.current.slice(0, count).join('')
+  return <SimpleMarkdown>{shown}</SimpleMarkdown>
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type Role = 'user' | 'agent' | 'system'
@@ -37,6 +83,7 @@ interface Message {
   timestamp: Date
   agentsUsed?: AgentStep[]
   jobIds?: string[]
+  animate?: boolean
 }
 
 const AGENT_LABELS: Record<string, string> = {
@@ -180,25 +227,20 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   const [hasUserInteracted, setHasUserInteracted] = useState(false)
   const [pendingAgents, setPendingAgents] = useState<AgentStep[]>([])
   const [error, setError]               = useState<string | null>(null)
-  const [resumeFilename, setResumeFilename] = useState<string | null>(null)
-  const [uploadState, setUploadState]   = useState<'idle' | 'uploading' | 'error'>('idle')
   const [coverLetter, setCoverLetter] = useState<{ text: string; title: string; company: string } | null>(null)
   const [coverLetterState, setCoverLetterState] = useState<'idle' | 'generating' | 'error'>('idle')
   const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
   const [resumeFit, setResumeFit] = useState<{ text: string; title: string; company: string } | null>(null)
   const [resumeFitState, setResumeFitState] = useState<'idle' | 'generating' | 'error'>('idle')
   const [resumeFitError, setResumeFitError] = useState<string | null>(null)
+  const [resumes, setResumes] = useState<ResumeListItem[]>([])
+  const [activeResumeId, setActiveResumeId] = useState<number | null>(null)
+  const [resumeMenuOpen, setResumeMenuOpen] = useState(false)
+  const [switchingResume, setSwitchingResume] = useState(false)
 
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Fetch existing resume on mount
-  useEffect(() => {
-    getMyResume()
-      .then(info => { if (info) setResumeFilename(info.filename) })
-      .catch(() => {})
-  }, [])
+  const resumeMenuRef = useRef<HTMLDivElement>(null)
 
   // Fire a one-shot job recommendation right after a fresh login
   useEffect(() => {
@@ -210,7 +252,7 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
       .then(({ reply, job_ids }) => {
         setMessages(prev => [
           ...prev,
-          { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), jobIds: job_ids },
+          { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), jobIds: job_ids, animate: true },
         ])
       })
       .catch(() => {})
@@ -221,6 +263,47 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
+
+  // Keep the view pinned to the bottom while a reply types itself out
+  const scrollToBottom = () => bottomRef.current?.scrollIntoView({ block: 'end' })
+
+  // Load the user's resumes so the active one can be shown / switched
+  useEffect(() => {
+    listResumes()
+      .then(rows => {
+        setResumes(rows)
+        setActiveResumeId(rows.find(r => r.is_active)?.id ?? null)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Close the resume dropdown on an outside click
+  useEffect(() => {
+    if (!resumeMenuOpen) return
+    const onDocClick = (e: MouseEvent) => {
+      if (resumeMenuRef.current && !resumeMenuRef.current.contains(e.target as Node)) {
+        setResumeMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [resumeMenuOpen])
+
+  const handleSelectActiveResume = async (id: number) => {
+    setResumeMenuOpen(false)
+    if (id === activeResumeId || switchingResume) return
+    const previous = activeResumeId
+    setActiveResumeId(id)
+    setSwitchingResume(true)
+    try {
+      await setActiveResume(id)
+      setResumes(rs => rs.map(r => ({ ...r, is_active: r.id === id })))
+    } catch {
+      setActiveResumeId(previous)
+    } finally {
+      setSwitchingResume(false)
+    }
+  }
 
 
   const send = async (text: string) => {
@@ -252,7 +335,7 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
       setPendingAgents([])
       setMessages(prev => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), agentsUsed, jobIds },
+        { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), agentsUsed, jobIds, animate: true },
       ])
     } catch {
       setPendingAgents([])
@@ -270,31 +353,6 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
     }
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-
-    setUploadState('uploading')
-    try {
-      await uploadResume(file)
-      setResumeFilename(file.name)
-      setUploadState('idle')
-      setMessages(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'system',
-          text: `Resume "${file.name}" uploaded successfully.`,
-          timestamp: new Date(),
-        },
-      ])
-    } catch {
-      setUploadState('error')
-      setTimeout(() => setUploadState('idle'), 3000)
-    }
-  }
-
   const handleGenerateCoverLetter = async () => {
     if (!selectedJob || coverLetterState === 'generating') return
     setCoverLetterState('generating')
@@ -302,17 +360,6 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
     try {
       const result = await generateCoverLetter(selectedJob.id)
       setCoverLetter({ text: result.cover_letter, title: result.job_title, company: result.company })
-      if (result.skill_gaps && result.skill_gaps !== 'No clear skill gaps') {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            role: 'system',
-            text: `Skill gaps for ${result.job_title}:\n${result.skill_gaps}`,
-            timestamp: new Date(),
-          },
-        ])
-      }
       setCoverLetterState('idle')
     } catch (error: any) {
       setCoverLetterState('error')
@@ -360,12 +407,26 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
 
   const showBackdrop = !hasUserInteracted
   const showMessages = messages.length > 0 || isTyping
-  const lastAgentId = [...messages].reverse().find(m => m.role === 'agent')?.id
+
+  const activeResume = resumes.find(r => r.id === activeResumeId)
+  const activeResumeName = activeResume ? (activeResume.title || activeResume.filename) : 'None'
 
   return (
     <div className="agent-chat">
       {/* Header */}
       <div className="agent-header">
+        <div className="agent-avatar">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2v3"/>
+            <circle cx="12" cy="2" r="1" fill="currentColor" stroke="none"/>
+            <rect x="2" y="5" width="20" height="14" rx="6"/>
+            <circle cx="9" cy="11" r="1.8" fill="currentColor" stroke="none"/>
+            <circle cx="15" cy="11" r="1.8" fill="currentColor" stroke="none"/>
+            <path d="M9 15 Q12 17.5 15 15"/>
+            <path d="M2 10H0"/><path d="M22 10h2"/>
+          </svg>
+        </div>
         <div>
           <p className="agent-name">Career Agent</p>
           <p className="agent-status">
@@ -388,14 +449,63 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
         </div>
       </div>
 
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
+      {selectedJob && (
+        <div className="agent-action-bar">
+          {resumes.length > 0 && (
+            <div className="resume-picker" ref={resumeMenuRef}>
+              <button
+                className="resume-picker-btn"
+                onClick={() => setResumeMenuOpen(o => !o)}
+                disabled={switchingResume}
+                aria-haspopup="listbox"
+                aria-expanded={resumeMenuOpen}
+                title="Change which resume the web app and agents use"
+              >
+                <span className="resume-picker-label">
+                  Current active resume: <strong>{activeResumeName}</strong>
+                </span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {resumeMenuOpen && (
+                <ul className="resume-picker-menu" role="listbox">
+                  {resumes.map(r => (
+                    <li key={r.id}>
+                      <button
+                        className={`resume-picker-item ${r.id === activeResumeId ? 'is-active' : ''}`}
+                        onClick={() => handleSelectActiveResume(r.id)}
+                        role="option"
+                        aria-selected={r.id === activeResumeId}
+                      >
+                        <span className="resume-picker-item-name">{r.title || r.filename}</span>
+                        {r.id === activeResumeId && <span className="resume-picker-check">✓</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          <button
+            className="agent-fit-resume-btn"
+            onClick={handleGenerateResumeFit}
+            disabled={resumeFitState === 'generating'}
+            title="Tailor your resume to the selected job"
+          >
+            {resumeFitState === 'generating' ? 'Fitting…' : 'Fit resume'}
+          </button>
+          <button
+            className="agent-cover-letter-btn"
+            onClick={handleGenerateCoverLetter}
+            disabled={coverLetterState === 'generating'}
+            title="Generate a cover letter for the selected job"
+          >
+            {coverLetterState === 'generating' ? 'Drafting…' : 'Draft cover letter'}
+          </button>
+        </div>
+      )}
 
       {/* Message area */}
       <div className="agent-messages">
@@ -437,7 +547,11 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
                   <div className="message-content">
                     <div className="bubble agent">
                       <div className="msg-text">
-                        <SimpleMarkdown>{msg.text}</SimpleMarkdown>
+                        <TypewriterMarkdown
+                          text={msg.text}
+                          animate={!!msg.animate}
+                          onProgress={scrollToBottom}
+                        />
                       </div>
                       {msg.jobIds && msg.jobIds.length > 0 && (
                         <div className="job-mini-cards">
@@ -453,20 +567,6 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
                         })}
                       </span>
                     </div>
-                    {msg.id === lastAgentId && !isTyping && (
-                      <div className="agent-bubble-avatar">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                          stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 2v3"/>
-                          <circle cx="12" cy="2" r="1" fill="currentColor" stroke="none"/>
-                          <rect x="2" y="5" width="20" height="14" rx="6"/>
-                          <circle cx="9" cy="11" r="1.8" fill="currentColor" stroke="none"/>
-                          <circle cx="15" cy="11" r="1.8" fill="currentColor" stroke="none"/>
-                          <path d="M9 15 Q12 17.5 15 15"/>
-                          <path d="M2 10H0"/><path d="M22 10h2"/>
-                        </svg>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="bubble user">
@@ -519,39 +619,55 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
       </div>
 
       {coverLetter && (
-        <div className="cover-letter-editor" role="dialog" aria-label="Cover letter editor">
-          <div className="cover-letter-editor-header">
-            <div>
-              <p className="cover-letter-editor-title">Cover letter</p>
-              <p className="cover-letter-editor-meta">{coverLetter.title}{coverLetter.company ? ` · ${coverLetter.company}` : ''}</p>
+        <div className="cover-letter-overlay" onClick={() => setCoverLetter(null)}>
+          <div
+            className="cover-letter-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Cover letter editor"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="cover-letter-editor-header">
+              <div>
+                <p className="cover-letter-editor-title">Cover letter</p>
+                <p className="cover-letter-editor-meta">{coverLetter.title}{coverLetter.company ? ` · ${coverLetter.company}` : ''}</p>
+              </div>
+              <button className="cover-letter-close" onClick={() => setCoverLetter(null)} aria-label="Close editor">×</button>
             </div>
-            <button className="cover-letter-close" onClick={() => setCoverLetter(null)} aria-label="Close editor">×</button>
+            <textarea
+              className="cover-letter-textarea"
+              value={coverLetter.text}
+              onChange={e => setCoverLetter({ ...coverLetter, text: e.target.value })}
+              aria-label="Cover letter text"
+            />
+            <button className="cover-letter-download" onClick={downloadCoverLetter}>Download edited letter</button>
           </div>
-          <textarea
-            className="cover-letter-textarea"
-            value={coverLetter.text}
-            onChange={e => setCoverLetter({ ...coverLetter, text: e.target.value })}
-            aria-label="Cover letter text"
-          />
-          <button className="cover-letter-download" onClick={downloadCoverLetter}>Download edited letter</button>
         </div>
       )}
       {resumeFit && (
-        <div className="cover-letter-editor resume-fit-editor" role="dialog" aria-label="Resume fit editor">
-          <div className="cover-letter-editor-header">
-            <div>
-              <p className="cover-letter-editor-title">Tailored resume</p>
-              <p className="cover-letter-editor-meta">{resumeFit.title}{resumeFit.company ? ` · ${resumeFit.company}` : ''}</p>
+        <div className="cover-letter-overlay" onClick={() => setResumeFit(null)}>
+          <div
+            className="cover-letter-editor resume-fit-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Resume fit editor"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="cover-letter-editor-header">
+              <div>
+                <p className="cover-letter-editor-title">Tailored resume</p>
+                <p className="cover-letter-editor-meta">{resumeFit.title}{resumeFit.company ? ` · ${resumeFit.company}` : ''}</p>
+              </div>
+              <button className="cover-letter-close" onClick={() => setResumeFit(null)} aria-label="Close editor">×</button>
             </div>
-            <button className="cover-letter-close" onClick={() => setResumeFit(null)} aria-label="Close editor">×</button>
+            <textarea
+              className="cover-letter-textarea"
+              value={resumeFit.text}
+              onChange={e => setResumeFit({ ...resumeFit, text: e.target.value })}
+              aria-label="Tailored resume text"
+            />
+            <button className="cover-letter-download" onClick={downloadResumeFit}>Download edited resume</button>
           </div>
-          <textarea
-            className="cover-letter-textarea"
-            value={resumeFit.text}
-            onChange={e => setResumeFit({ ...resumeFit, text: e.target.value })}
-            aria-label="Tailored resume text"
-          />
-          <button className="cover-letter-download" onClick={downloadResumeFit}>Download edited resume</button>
         </div>
       )}
       {coverLetterState === 'error' && <div className="agent-error cover-letter-error">{coverLetterError}</div>}
@@ -559,52 +675,6 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
 
       {/* Input bar */}
       <div className="agent-input-bar">
-        {selectedJob && (
-          <>
-            <button
-              className="agent-fit-resume-btn"
-              onClick={handleGenerateResumeFit}
-              disabled={resumeFitState === 'generating'}
-              title="Tailor your resume to the selected job"
-            >
-              {resumeFitState === 'generating' ? 'Fitting…' : 'Fit resume'}
-            </button>
-            <button
-              className="agent-cover-letter-btn"
-              onClick={handleGenerateCoverLetter}
-              disabled={coverLetterState === 'generating'}
-              title="Generate a cover letter for the selected job"
-            >
-              {coverLetterState === 'generating' ? 'Drafting…' : 'Draft cover letter'}
-            </button>
-          </>
-        )}
-        {/* Resume upload button */}
-        <button
-          className={`agent-icon-btn agent-resume-btn ${resumeFilename ? 'has-resume' : ''}`}
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploadState === 'uploading'}
-          title={
-            uploadState === 'uploading' ? 'Uploading…' :
-            uploadState === 'error'     ? 'Upload failed — try again' :
-            resumeFilename              ? `Resume: ${resumeFilename}\nClick to replace` :
-                                          'Upload resume (PDF)'
-          }
-          aria-label="Upload resume"
-        >
-          {uploadState === 'uploading' ? (
-            <span className="upload-spinner" />
-          ) : (
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="12" y1="18" x2="12" y2="12"/>
-              <line x1="9" y1="15" x2="15" y2="15"/>
-            </svg>
-          )}
-        </button>
-
         <textarea
           ref={inputRef}
           className="agent-input"

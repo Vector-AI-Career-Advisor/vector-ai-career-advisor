@@ -1,6 +1,27 @@
 from __future__ import annotations
 import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
+
+
+# ── Company identity ──────────────────────────────────────────────────────────
+
+_BLANK_COMPANY = {"", "n/a", "na", "none", "unknown"}
+
+
+def company_slug(name: str | None) -> str | None:
+    """
+    Normalise a company name into a stable slug used as the key for a company's
+    stored logo (see `company_logos` table). Returns None for blank / placeholder
+    names so the caller can skip them.
+
+    Known limitation: "Google" and "Google LLC" produce different slugs.
+    """
+    if not name or name.strip().lower() in _BLANK_COMPANY:
+        return None
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+    return slug or None
 
 
 # ── Formatting ────────────────────────────────────────────────────────────────
@@ -59,7 +80,8 @@ def build_chroma_metadata(job: dict) -> dict:
     Lists are joined as comma-separated strings.
     """
     scalar_fields = ("id", "title", "role", "seniority", "company",
-                     "location", "url", "yearsexperience", "keyword", "source")
+                     "location", "url", "yearsexperience", "keyword", "source",
+                     "company_slug")
     list_fields   = ("skills_must", "skills_nice", "past_experience")
 
     meta = {}

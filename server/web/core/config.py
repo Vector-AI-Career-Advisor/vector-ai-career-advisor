@@ -34,6 +34,15 @@ LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET", "")
 CHROMA_PERSIST_DIR = _resolve(os.getenv("CHROMA_DIR", "chroma_db"))
 CHROMA_COLLECTION  = os.getenv("CHROMA_COLLECTION")
 
+# ── Static assets (company logos) ─────────────────────────────────────────────
+# STATIC_DIR is served at /static by the web app; the ETL pipeline and
+# scripts/backfill_logos.py write company logos into STATIC_DIR/logos. In Docker
+# that subdirectory is a named volume shared between the `server` and `scheduler`
+# containers (see docker-compose.yml).
+STATIC_DIR    = _resolve("web/static")
+LOGO_DIR      = os.path.join(STATIC_DIR, "logos")
+LOGO_URL_BASE = os.getenv("STATIC_BASE_URL", "http://localhost:8000").rstrip("/") + "/static/logos"
+
 # ── Embeddings ────────────────────────────────────────────────────────────────
 EMBEDDING_DIM         = 1536
 LOCAL_EMBEDDING_MODEL = "all-MiniLM-L6-v2"

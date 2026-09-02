@@ -85,7 +85,7 @@
 .stats-section-badge {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  color: var(--accent2);
+  color: var(--text);
   background: rgba(124,90,247,0.12);
   border: 1px solid rgba(124,90,247,0.2);
   border-radius: 4px;
@@ -114,7 +114,7 @@
 .role-tab.active {
   background: rgba(124,90,247,0.15);
   border-color: rgba(124,90,247,0.4);
-  color: var(--accent2);
+  color: var(--text);
 }
 
 /* Tooltip */
@@ -127,7 +127,7 @@
   color: var(--text);
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
-.chart-tooltip-label { font-weight: 700; margin-bottom: 0.2rem; color: var(--accent2); }
+.chart-tooltip-label { font-weight: 700; margin-bottom: 0.2rem; color: var(--text); }
 .chart-tooltip-value { color: var(--muted); font-family: var(--font-mono); font-size: 0.78rem; }
 
 @media (max-width: 1100px) {

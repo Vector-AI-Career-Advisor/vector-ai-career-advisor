@@ -19,7 +19,9 @@ from server.db.postgres import (
     refresh_job_count_stat,
 )
 from .extractor import extract_all_parallel
+from .logos import sync_company_logos
 from .scraper import build_driver, scrape_keyword
+from .utils import company_slug
 
 log = logging.getLogger(__name__)
 
@@ -132,6 +134,20 @@ def run_load_postgres(jobs: List[dict]) -> int:
     init_db(conn)
     inserted = insert_jobs(conn, unique_jobs)
     refresh_job_count_stat(conn)
+
+    # One logo per company, fetched once. Build {slug: (name, source_url)} from
+    # this batch and let sync_company_logos skip the companies already stored.
+    companies: dict[str, tuple[str, str]] = {}
+    for job in unique_jobs:
+        slug = company_slug(job.get("company"))
+        if slug and job.get("logo_source_url"):
+            companies.setdefault(slug, (job["company"], job["logo_source_url"]))
+    try:
+        stored = sync_company_logos(conn, companies)
+        log.info("Company logos: %d new.", stored)
+    except Exception:
+        log.exception("Company-logo sync failed (continuing).")
+
     conn.close()
     return inserted
 

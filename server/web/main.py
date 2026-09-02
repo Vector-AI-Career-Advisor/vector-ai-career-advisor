@@ -14,6 +14,7 @@ import traceback
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from features.auth.router import router as auth_router
 from features.jobs.router import router as jobs_router
@@ -23,6 +24,7 @@ from features.stats.router import router as stats_router
 from features.applications.router import router as applications_router
 from features.agents.router import router as agent_router
 from server.db.postgres import init_db, get_connection
+from server.web.core.config import STATIC_DIR, LOGO_DIR
 from core.exceptions import AppError, app_error_handler
 from server.web.core.logging import setup_logging
 
@@ -80,6 +82,10 @@ def health_check():
     except Exception as e:
         log.error("Health check failed: %s", str(e))
         return {"status": "unhealthy", "db": "error", "detail": str(e)}
+
+# Company logo images written by the ETL pipeline / scripts/backfill_logos.py.
+os.makedirs(LOGO_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.include_router(auth_router,    prefix="/auth",    tags=["auth"])
 app.include_router(profile_router,  prefix="/profile",  tags=["profile"])

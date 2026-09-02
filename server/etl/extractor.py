@@ -17,6 +17,7 @@ from server.web.core.config import (
     VALID_ROLES,
     VALID_SENIORITY,
 )
+from .utils import company_slug
 
 log = logging.getLogger(__name__)
 
@@ -155,6 +156,8 @@ def extract_all_parallel(stubs: list[dict]) -> list[dict]:
             "posted_at":       stub.get("posted_at"),
             "keyword":         stub["keyword"],
             "source":          "linkedin",
+            "logo_source_url": stub.get("logo_source_url"),
+            "company_slug":    company_slug(stub["company"]),
         }
         log.info(
             "  ✓ %s | %s | exp: %s",

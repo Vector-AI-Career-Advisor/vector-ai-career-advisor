@@ -168,9 +168,23 @@ def fetch_stubs(driver, seen_ids: set) -> list:
             except Exception:
                 location = "N/A"
 
+            try:
+                img = card.find_element(By.CSS_SELECTOR, "img.artdeco-entity-image")
+                logo_source_url = (
+                    img.get_attribute("data-delayed-url")
+                    or img.get_attribute("src")
+                    or ""
+                )
+            except Exception:
+                logo_source_url = ""
+            # keep only a real CDN logo; ghost placeholders are inline SVG data: URIs
+            if not logo_source_url.startswith("https://media.licdn.com"):
+                logo_source_url = None
+
             stubs.append({
                 "id": job_id, "title": title, "company": company,
                 "location": location, "url": job_url.split("?")[0],
+                "logo_source_url": logo_source_url,
             })
         except Exception:
             continue
