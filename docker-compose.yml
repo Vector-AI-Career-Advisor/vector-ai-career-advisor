@@ -36,6 +36,39 @@ services:
         condition: service_healthy
       mcp-db:
         condition: service_started
+    # `depends_on` ordering is only honored by `docker compose up`, NOT when the
+    # Docker daemon auto-restarts containers after a host/daemon reboot. On reboot
+    # `server` can start before `postgres` is on the network, `init_db()` in the
+    # startup hook then fails on DNS, and because uvicorn runs with --reload the
+    # reloader parent stays alive with nothing bound to :8000 (container looks
+    # "Up" but serves nothing). This healthcheck marks that state unhealthy; the
+    # `autoheal` sidecar below restarts any unhealthy container labeled autoheal.
+    # The app normally serves within ~5s, so start_period only needs to cover a
+    # cold container start; keeping it (and the interval) tight bounds how long a
+    # failed startup can sit unserved before autoheal recycles it — worst case
+    # here is start_period + retries * interval ≈ 90s.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,sys,urllib.request; sys.exit(0 if json.load(urllib.request.urlopen('http://localhost:8000/health', timeout=5)).get('status')=='healthy' else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    labels:
+      autoheal: "true"
+
+  # Watches Docker events and restarts any container that goes `unhealthy` and
+  # carries the label `autoheal=true`. Plain Compose does not act on health
+  # status on its own, so without this a failed `server` startup just sits idle.
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: always
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 10
+      AUTOHEAL_START_PERIOD: 30
+      DOCKER_SOCK: /var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # Separate container, separate credential: this is the read-only path the
   # agent runtime uses to query Postgres (see scripts/sql/create_agent_role.sql
