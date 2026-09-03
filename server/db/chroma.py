@@ -57,7 +57,7 @@ Required Skills: {_join(job.get('skills_must', []))}
 Nice Skills: {_join(job.get('skills_nice', []))}
 Experience: {job.get('yearsexperience', '')} years
 Past Experience: {_join(job.get('past_experience', []))}
-Education: {_join(job.get('education', []))}
+Education: {_join(job.get('education', []))} (min level: {job.get('education_level') or 'none'})
 
 Description:
 {job.get('description', '')}

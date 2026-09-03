@@ -17,6 +17,7 @@ from server.web.core.config import (
     VALID_ROLES,
     VALID_SENIORITY,
 )
+from .education import normalize_education_level
 from .locations import normalize_location
 from .skills import normalize_skills
 from .utils import company_slug
@@ -195,6 +196,7 @@ def extract_all_parallel(stubs: list[dict]) -> list[dict]:
             "yearsexperience": extracted["yearsexperience"],
             "past_experience": extracted["past_experience"],
             "education":       extracted["education"],
+            "education_level": normalize_education_level(extracted["education"]),
             "posted_at":       stub.get("posted_at"),
             "keyword":         stub["keyword"],
             "source":          "linkedin",

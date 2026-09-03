@@ -1,5 +1,5 @@
 import type { SavedFilterBody } from '../api/savedFilters'
-import { POSTED_DATE_OPTIONS, EXP_MIN, EXP_MAX } from '../constants'
+import { POSTED_DATE_OPTIONS, EXP_MIN, EXP_MAX, JOB_EDUCATION_LABELS } from '../constants'
 
 export interface FilterFacet {
   label: string
@@ -32,6 +32,12 @@ export function summarizeFilter(f: SavedFilterBody): FilterFacet[] {
   }
 
   if (f.skills?.length) facets.push({ label: 'Skills', value: f.skills.join(', ') })
+  if (f.education?.length) {
+    facets.push({
+      label: 'Education',
+      value: f.education.map(c => JOB_EDUCATION_LABELS[c] ?? c).join(', '),
+    })
+  }
   if (f.posted_date) facets.push({ label: 'Posted', value: postedLabel(f.posted_date) })
 
   return facets

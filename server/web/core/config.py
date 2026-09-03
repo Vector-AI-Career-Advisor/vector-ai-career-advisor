@@ -59,6 +59,9 @@ ANTHROPIC_MODEL   = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
 CHROME_VERSION = int(os.getenv("CHROME_VERSION", 147))
 DATE_FILTER    = os.getenv("DATE_FILTER", "r604800")
 DAILY_TARGET   = int(os.getenv("DAILY_TARGET", 50))
+# Give up the whole scrape after this many keywords in a row yield no new jobs
+# (LinkedIn is likely auth-walling / the session is dead). 0 disables the guard.
+MAX_EMPTY_KEYWORD_STREAK = int(os.getenv("MAX_EMPTY_KEYWORD_STREAK", 5))
 
 KEYWORDS = [
     "software engineer", "software developer", "fullstack developer", "full stack developer",

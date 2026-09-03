@@ -17,6 +17,7 @@ def list_jobs(
     limit: int = LIMIT,
     offset: int = 0,
     years_experience_max: Optional[int] = None,
+    education: Optional[List[str]] = None,
 ) -> dict:
     conn = get_connection()
     try:
@@ -69,6 +70,12 @@ def list_jobs(
             filters.append(f"role ILIKE ANY(ARRAY[{role_placeholders}])")
             params.extend([f"%{role}%" for role in roles])
         
+        # Education filter — exact match on the derived jobs.education_level
+        # (none | bachelor | master | phd), one or more values.
+        if education:
+            filters.append("education_level = ANY(%s)")
+            params.append(list(education))
+
         # Years of experience filter
         if years_experience_min is not None:
             filters.append("yearsexperience >= %s")
@@ -100,7 +107,7 @@ def list_jobs(
                 SELECT COUNT(*) OVER() AS total_count,
                        j.id, j.title, j.role, j.seniority, j.company, j.location, j.region, j.url,
                        j.description, j.skills_must, j.skills_nice, j.yearsexperience,
-                       j.past_experience, j.education, j.keyword, j.source, j.posted_at, j.scraped_at,
+                       j.past_experience, j.education, j.education_level, j.keyword, j.source, j.posted_at, j.scraped_at,
                        cl.logo_path
                 FROM jobs j
                 LEFT JOIN company_logos cl
@@ -136,7 +143,7 @@ def get_job(job_id: str) -> Optional[dict]:
             cur.execute("""
                 SELECT j.id, j.title, j.role, j.seniority, j.company, j.location, j.region, j.url,
                        j.description, j.skills_must, j.skills_nice, j.yearsexperience,
-                       j.past_experience, j.education, j.keyword, j.source, j.posted_at, j.scraped_at,
+                       j.past_experience, j.education, j.education_level, j.keyword, j.source, j.posted_at, j.scraped_at,
                        cl.logo_path
                 FROM jobs j
                 LEFT JOIN company_logos cl

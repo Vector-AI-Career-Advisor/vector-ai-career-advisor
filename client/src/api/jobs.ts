@@ -15,6 +15,7 @@ export interface Job {
   yearsexperience?: number
   past_experience?: string[]
   education?: string[]
+  education_level?: string
   keyword?: string
   source?: string
   posted_at?: string
@@ -31,6 +32,7 @@ export interface JobFilters {
   years_experience_min?: number
   years_experience_max?: number
   skills?: string[]
+  education?: string[]
   limit?: number
   offset?: number
 }
