@@ -260,13 +260,15 @@ export default function ProfilePage({ onApplyFilter }: ProfilePageProps = {}) {
   }
 
   // ── Derived ──────────────────────────────────────────────────────────────
-  const initials = email ? email.slice(0, 2).toUpperCase() : '??'
-
   const fmt = (d?: string) =>
     d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
 
   const user = profileSummary?.user ?? EMPTY_USER
   const prefs = profileSummary?.work_preferences ?? {}
+
+  const fullName = (user.first_name || user.last_name)
+    ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim()
+    : null
 
   return (
     <div className="profile-root">
@@ -281,9 +283,16 @@ export default function ProfilePage({ onApplyFilter }: ProfilePageProps = {}) {
         <SectionHeader title="Account" badge="You" />
 
         <div className="profile-card user-card">
-          <div className="user-avatar-lg">{initials}</div>
+          <div className="user-avatar-lg" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </div>
           <div className="user-info">
-            <p className="user-email">{email ?? '—'}</p>
+            {fullName && <p className="user-name">{fullName}</p>}
+            <p className={fullName ? 'user-email' : 'user-name'}>{email ?? '—'}</p>
             {memberSince && (
               <p className="user-since">Member since {memberSince}</p>
             )}
