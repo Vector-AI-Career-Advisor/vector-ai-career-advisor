@@ -108,7 +108,7 @@ export default function StatsPage() {
     </div>
   )
 
-  const { summary, jobs_per_day, top_companies, jobs_by_location, top_skills, by_seniority, skills_by_role } = stats
+  const { summary, jobs_per_day, top_companies, jobs_by_region, top_skills, by_seniority, skills_by_role } = stats
   const roles = Object.keys(skills_by_role)
   const roleSkills = skills_by_role[activeRole] ?? []
 
@@ -167,18 +167,17 @@ export default function StatsPage() {
 
         <div className="stats-section">
           <div className="stats-section-header">
-            <span className="stats-section-title">Jobs by Location</span>
-            <span className="stats-section-badge">top 15</span>
+            <span className="stats-section-title">Jobs by Region</span>
           </div>
           <div className="chart-card">
             <ResponsiveContainer width="100%" height={340}>
-              <BarChart data={jobs_by_location.map(l => ({ ...l, location: trunc(l.location) }))} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+              <BarChart data={jobs_by_region.map(r => ({ ...r, region: trunc(r.region) }))} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
                 <XAxis type="number" tick={axisStyle} stroke={axisColor} tickLine={false} axisLine={false} />
-                <YAxis dataKey="location" type="category" tick={{ ...axisStyle, fontSize: 10 }} stroke={axisColor} tickLine={false} width={110} />
+                <YAxis dataKey="region" type="category" tick={{ ...axisStyle, fontSize: 10 }} stroke={axisColor} tickLine={false} width={110} />
                 <Tooltip content={<ChartTooltip valueLabel="Jobs" />} cursor={{ fill: 'rgba(96,165,250,0.06)' }} />
                 <Bar dataKey="count" name="Jobs" radius={[0, 4, 4, 0]} maxBarSize={16}>
-                  {jobs_by_location.map((_, i) => <Cell key={i} fill={`rgba(96,165,250,${1 - i * 0.055})`} />)}
+                  {jobs_by_region.map((_, i) => <Cell key={i} fill={`rgba(96,165,250,${1 - i * 0.055})`} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

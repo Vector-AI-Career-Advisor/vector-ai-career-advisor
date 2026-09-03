@@ -13,8 +13,8 @@ export interface CompanyCount {
   count: number
 }
 
-export interface LocationCount {
-  location: string
+export interface RegionCount {
+  region: string
   count: number
 }
 
@@ -37,7 +37,7 @@ export interface StatsResponse {
   }
   jobs_per_day: DailyCount[]
   top_companies: CompanyCount[]
-  jobs_by_location: LocationCount[]
+  jobs_by_region: RegionCount[]
   top_skills: SkillCount[]
   by_seniority: SeniorityCount[]
   skills_by_role: Record<string, SkillCount[]>
