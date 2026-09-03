@@ -94,12 +94,19 @@
 
 /* Confirm dialog */
 .confirm-backdrop {
-  position: absolute; inset: 0;
-  background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
-  z-index: 10; display: flex; align-items: center; justify-content: center;
+  /* Sits over the drawer as a sibling (left/width set inline to match it) so the
+     scrim also covers the 1px border and rounded corners — an inset scrim clipped
+     by the drawer's overflow:hidden leaves the outline undimmed.
+     No backdrop-filter: it fails to paint inside a rounded/clipped container in
+     Chromium and the panel then reads as transparent in light mode. */
+  position: fixed;
+  top: 70px; bottom: 12px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 14px;
+  z-index: 55; display: flex; align-items: center; justify-content: center;
 }
 .confirm-dialog {
-  background: var(--surface2); border: 1px solid var(--border2);
+  background: var(--surface); border: 1px solid var(--border2);
   border-radius: calc(var(--radius) * 1.5);
   padding: 1.75rem 2rem; width: min(320px, 90%);
   box-shadow: 0 16px 48px rgba(0,0,0,0.4); text-align: center;

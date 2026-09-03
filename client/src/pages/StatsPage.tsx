@@ -91,7 +91,7 @@ export default function StatsPage() {
         const roles = Object.keys(data.skills_by_role)
         if (roles.length) setActiveRole(roles[0])
       })
-      .catch(() => setError('Failed to load statistics.'))
+      .catch(() => setError('Failed to load insights.'))
       .finally(() => setLoading(false))
   }, [])
 

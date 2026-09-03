@@ -254,7 +254,7 @@ export default function JobsPage() {
               <line x1="12" y1="20" x2="12" y2="4"/>
               <line x1="6"  y1="20" x2="6"  y2="14"/>
             </svg>
-            Statistics
+            Insights
           </button>
 
           <button
@@ -311,7 +311,7 @@ export default function JobsPage() {
       </nav>
 
       <div className="page-body" style={{ paddingRight: chatOpen ? chatWidth : 0 }}>
-      {/* ── Statistics view ── */}
+      {/* ── Insights view ── */}
       {activeTab === 'stats' && (
         <div className="stats-view">
           <StatsPage />

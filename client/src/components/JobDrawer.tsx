@@ -148,32 +148,32 @@ export default function JobDrawer({ job, onClose, chatWidth = 0 }: Props) {
             </Section>
           )}
         </div>
+      </aside>
 
-        {showConfirm && (
-          <div className="confirm-backdrop">
-            <div className="confirm-dialog">
-              <p className="confirm-title">Did you apply?</p>
-              <p className="confirm-sub">We'll track it in your applications.</p>
-              <div className="confirm-actions">
-                <button
-                  className="confirm-yes"
-                  onClick={handleConfirmYes}
-                  disabled={applying}
-                >
-                  {applying ? 'Saving…' : 'Yes'}
-                </button>
-                <button
-                  className="confirm-no"
-                  onClick={() => setShowConfirm(false)}
-                  disabled={applying}
-                >
-                  No
-                </button>
-              </div>
+      {showConfirm && (
+        <div className="confirm-backdrop" style={{ left: drawerLeft, width: drawerWidth }}>
+          <div className="confirm-dialog">
+            <p className="confirm-title">Did you apply?</p>
+            <p className="confirm-sub">We'll track it in your applications.</p>
+            <div className="confirm-actions">
+              <button
+                className="confirm-yes"
+                onClick={handleConfirmYes}
+                disabled={applying}
+              >
+                {applying ? 'Saving…' : 'Yes'}
+              </button>
+              <button
+                className="confirm-no"
+                onClick={() => setShowConfirm(false)}
+                disabled={applying}
+              >
+                No
+              </button>
             </div>
           </div>
-        )}
-      </aside>
+        </div>
+      )}
     </>
   )
 }
