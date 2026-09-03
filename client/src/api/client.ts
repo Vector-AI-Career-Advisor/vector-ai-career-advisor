@@ -1,6 +1,11 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: 'http://localhost:8000' })
+const api = axios.create({
+  baseURL: 'http://localhost:8000',
+  // Repeat array params as `key=a&key=b` (no `[]`), which is what FastAPI's
+  // `List[str] = Query(...)` reads — the axios default `key[]=a` is ignored.
+  paramsSerializer: { indexes: null },
+})
 
 // Attach JWT to every request automatically
 api.interceptors.request.use((config) => {

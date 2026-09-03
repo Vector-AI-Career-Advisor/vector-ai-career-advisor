@@ -17,6 +17,7 @@ class FilterPayload(BaseModel):
     years_experience_min: Optional[int] = None
     years_experience_max: Optional[int] = None
     skills: Optional[List[str]] = None
+    education: Optional[List[str]] = None
 
     model_config = {"extra": "ignore"}
 

@@ -7,7 +7,7 @@ import logging
 import time
 from typing import List
 from selenium.common.exceptions import InvalidSessionIdException, WebDriverException
-from server.web.core.config import DAILY_TARGET, KEYWORDS
+from server.web.core.config import DAILY_TARGET, KEYWORDS, MAX_EMPTY_KEYWORD_STREAK
 from server.db.chroma import get_existing_ids, init_chroma, upsert_jobs
 from server.db.postgres import (
     count_jobs_today,
@@ -28,12 +28,19 @@ log = logging.getLogger(__name__)
 
 # ── Step 1: Scrape ────────────────────────────────────────────────────────────
 
-def run_scrape(daily_target: int = DAILY_TARGET) -> List[dict]:
+def run_scrape(
+    daily_target: int = DAILY_TARGET,
+    max_empty_streak: int = MAX_EMPTY_KEYWORD_STREAK,
+) -> List[dict]:
     """
     Scrape LinkedIn for new jobs up to `daily_target` per day.
     Returns a list of raw stub dicts (with raw_description + posted_at).
     Stubs where no description was fetched are filtered out here so that
     downstream steps never waste an API call on empty content.
+
+    If `max_empty_streak` keywords in a row yield no new jobs the scrape gives
+    up early — LinkedIn is likely auth-walling or the browser session is dead,
+    so grinding through the rest of KEYWORDS just wastes time. Pass 0 to disable.
     """
     conn          = get_connection()
     init_db(conn)
@@ -52,11 +59,13 @@ def run_scrape(daily_target: int = DAILY_TARGET) -> List[dict]:
 
     driver = build_driver()
     stubs  = []
+    empty_streak = 0
 
     for keyword in KEYWORDS:
         if len(stubs) >= remaining:
             break
 
+        count_before = len(stubs)
         try:
             for stub in scrape_keyword(driver, keyword, seen_ids, remaining - len(stubs)):
                 raw_desc = stub.get("raw_description", "")
@@ -87,6 +96,17 @@ def run_scrape(daily_target: int = DAILY_TARGET) -> List[dict]:
 
         except Exception as e:
             log.error("Error scraping keyword '%s': %s", keyword, e)
+
+        if len(stubs) > count_before:
+            empty_streak = 0
+        else:
+            empty_streak += 1
+            if max_empty_streak and empty_streak >= max_empty_streak:
+                log.warning(
+                    "No new jobs after %d keywords in a row — ending scrape early.",
+                    empty_streak,
+                )
+                break
 
     try:
         driver.quit()

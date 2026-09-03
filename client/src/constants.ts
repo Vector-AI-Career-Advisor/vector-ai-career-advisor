@@ -59,6 +59,18 @@ export const LOCATION_OPTIONS = [
   'Remote',
 ]
 
+// Jobs → Filters "Education" facet. Matches the derived jobs.education_level
+// (server/etl/education.py) — the minimum degree a posting requires.
+export const JOB_EDUCATION_OPTIONS: { value: string; label: string }[] = [
+  { value: 'none',     label: 'No degree required' },
+  { value: 'bachelor', label: "Bachelor's" },
+  { value: 'master',   label: "Master's" },
+  { value: 'phd',      label: 'PhD' },
+]
+
+export const JOB_EDUCATION_LABELS: Record<string, string> =
+  Object.fromEntries(JOB_EDUCATION_OPTIONS.map(o => [o.value, o.label]))
+
 export const POSTED_DATE_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'Anytime' },
   { value: 'last_24h', label: 'Last 24 hours' },

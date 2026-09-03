@@ -17,6 +17,7 @@ import {
 import { summarizeFilterInline } from '../lib/filterSummary'
 import {
   SENIORITIES, ROLE_OPTIONS, LOCATION_OPTIONS, POSTED_DATE_OPTIONS, EXP_MIN, EXP_MAX,
+  JOB_EDUCATION_OPTIONS, JOB_EDUCATION_LABELS,
 } from '../constants'
 import './JobsPage.css'
 
@@ -47,6 +48,7 @@ export default function JobsPage() {
   const [expRange, setExpRange] = useState<[number, number]>([EXP_MIN, EXP_MAX])
   const [debouncedExp, setDebouncedExp] = useState<[number, number]>([EXP_MIN, EXP_MAX])
   const [locations, setLocations] = useState<string[]>([])
+  const [education, setEducation] = useState<string[]>([])
   const [skills, setSkills] = useState<string[]>([])
   const [skillInput, setSkillInput] = useState('')
 
@@ -115,6 +117,7 @@ export default function JobsPage() {
         years_experience_min: debouncedExp[0] > EXP_MIN ? debouncedExp[0] : undefined,
         years_experience_max: debouncedExp[1] < EXP_MAX ? debouncedExp[1] : undefined,
         skills: skills.length > 0 ? skills : undefined,
+        education: education.length > 0 ? education : undefined,
         limit: LIMIT,
         offset: 0,
       })
@@ -127,7 +130,7 @@ export default function JobsPage() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedKeyword, seniorities, locations, postedDate, roles, debouncedExp, skills])
+  }, [debouncedKeyword, seniorities, locations, postedDate, roles, debouncedExp, skills, education])
 
   useEffect(() => { load() }, [load])
 
@@ -144,6 +147,7 @@ export default function JobsPage() {
         years_experience_min: debouncedExp[0] > EXP_MIN ? debouncedExp[0] : undefined,
         years_experience_max: debouncedExp[1] < EXP_MAX ? debouncedExp[1] : undefined,
         skills: skills.length > 0 ? skills : undefined,
+        education: education.length > 0 ? education : undefined,
         limit: LIMIT,
         offset,
       })
@@ -155,7 +159,7 @@ export default function JobsPage() {
     } catch { /* silent fail */ } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, offset, debouncedKeyword, seniorities, locations, postedDate, roles, debouncedExp, skills])
+  }, [loadingMore, hasMore, offset, debouncedKeyword, seniorities, locations, postedDate, roles, debouncedExp, skills, education])
 
   useEffect(() => {
     const sentinel = sentinelRef.current
@@ -181,12 +185,13 @@ export default function JobsPage() {
     setRoles([])
     setExpRange([EXP_MIN, EXP_MAX])
     setLocations([])
+    setEducation([])
     setSkills([])
     setSkillInput('')
   }
 
   const expFiltered = expRange[0] > EXP_MIN || expRange[1] < EXP_MAX
-  const hasFilters = keyword || seniorities.length > 0 || postedDate || roles.length > 0 || expFiltered || locations.length > 0 || skills.length > 0
+  const hasFilters = keyword || seniorities.length > 0 || postedDate || roles.length > 0 || expFiltered || locations.length > 0 || education.length > 0 || skills.length > 0
 
   // Apply a saved filter — replaces the whole filter state, then shows Jobs.
   const handleApplyFilter = (filters: JobFilters) => {
@@ -196,6 +201,7 @@ export default function JobsPage() {
     setPostedDate(filters.posted_date ?? '')
     setRoles(filters.roles ?? [])
     setExpRange([filters.years_experience_min ?? EXP_MIN, filters.years_experience_max ?? EXP_MAX])
+    setEducation(filters.education ?? [])
     setSkills(filters.skills ?? [])
     setActiveTab('jobs')
   }
@@ -212,6 +218,7 @@ export default function JobsPage() {
       years_experience_min: expRange[0] > EXP_MIN ? expRange[0] : undefined,
       years_experience_max: expRange[1] < EXP_MAX ? expRange[1] : undefined,
       skills: skills.length > 0 ? skills : undefined,
+      education: education.length > 0 ? education : undefined,
     }).catch(() => {})
     reloadPresets()
     setPresetName('')
@@ -434,6 +441,44 @@ export default function JobsPage() {
                       {SENIORITIES.map(s => (
                         <option key={s} value={s} disabled={seniorities.includes(s)}>
                           {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="filter-group">
+                  <label className="filter-label">Education</label>
+                  <div className="filter-tags-input">
+                    <div className="tags-display">
+                      {education.map(code => (
+                        <span key={code} className="tag">
+                          {JOB_EDUCATION_LABELS[code] ?? code}
+                          <button
+                            type="button"
+                            className="tag-remove"
+                            onClick={() => setEducation(education.filter(c => c !== code))}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <select
+                      value=""
+                      onChange={e => {
+                        const code = e.currentTarget.value
+                        if (code && !education.includes(code)) {
+                          setEducation([...education, code])
+                          e.currentTarget.value = ''
+                        }
+                      }}
+                      className="filter-input"
+                    >
+                      <option value="">Add education…</option>
+                      {JOB_EDUCATION_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value} disabled={education.includes(opt.value)}>
+                          {opt.label}
                         </option>
                       ))}
                     </select>

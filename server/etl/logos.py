@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
@@ -32,6 +33,8 @@ _EXT_BY_TYPE = {
 }
 _MIN_BYTES = 256
 _MAX_BYTES = 2 * 1024 * 1024
+_TIMEOUT = 5
+_MAX_WORKERS = 8
 _UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0 Safari/537.36"
 
 
@@ -42,7 +45,7 @@ def download_logo(slug: str, url: str, *, client: httpx.Client | None = None) ->
     too large / network error).
     """
     own_client = client is None
-    client = client or httpx.Client(timeout=10, follow_redirects=True)
+    client = client or httpx.Client(timeout=_TIMEOUT, follow_redirects=True)
     try:
         resp = client.get(url, headers={"User-Agent": _UA})
         resp.raise_for_status()
@@ -81,13 +84,25 @@ def sync_company_logos(conn, companies: dict[str, tuple[str | None, str]]) -> in
         return 0
 
     already = fetch_logo_status(conn)
+    todo = [
+        (slug, name, url)
+        for slug, (name, url) in companies.items()
+        if url and already.get(slug) != "ok"
+    ]
+    if not todo:
+        return 0
+
+    # Downloads run concurrently (pure network + per-slug file writes); the DB
+    # upserts stay on this thread — the psycopg connection isn't thread-safe.
     stored = 0
-    with httpx.Client(timeout=10, follow_redirects=True) as client:
-        for slug, (name, url) in companies.items():
-            if not url or already.get(slug) == "ok":
-                continue
-            fname = download_logo(slug, url, client=client)
-            upsert_company_logo(conn, slug, name, fname, url,
-                                status="ok" if fname else "missing")
-            stored += bool(fname)
+    with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as client:
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            results = pool.map(
+                lambda t: (t[0], t[1], t[2], download_logo(t[0], t[2], client=client)),
+                todo,
+            )
+            for slug, name, url, fname in results:
+                upsert_company_logo(conn, slug, name, fname, url,
+                                    status="ok" if fname else "missing")
+                stored += bool(fname)
     return stored

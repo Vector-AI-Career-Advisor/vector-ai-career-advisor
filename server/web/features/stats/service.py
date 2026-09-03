@@ -7,7 +7,7 @@ def get_stats() -> dict:
     Returns aggregated statistics about the jobs in the database:
       - jobs_per_day       : count of jobs scraped per calendar day (last 60 days)
       - top_companies      : top 15 companies by number of listings
-      - jobs_by_location   : top 15 locations by number of listings
+      - jobs_by_region     : job counts broken down by normalised region
       - top_skills         : top 20 must-have skills across all jobs
       - by_seniority       : job counts broken down by seniority level
       - skills_by_role     : top 8 must-have skills per distinct role
@@ -43,17 +43,16 @@ def get_stats() -> dict:
                 for r in cur.fetchall()
             ]
 
-            # ── 3. Jobs by location (top 15) ───────────────────────────────
+            # ── 3. Jobs by region ─────────────────────────────────────────
             cur.execute("""
-                SELECT location, COUNT(*) AS count
+                SELECT region, COUNT(*) AS count
                 FROM jobs
-                WHERE location IS NOT NULL AND location <> ''
-                GROUP BY location
-                ORDER BY count DESC
-                LIMIT 15;
+                WHERE region IS NOT NULL AND region <> ''
+                GROUP BY region
+                ORDER BY count DESC;
             """)
-            jobs_by_location = [
-                {"location": r[0], "count": r[1]}
+            jobs_by_region = [
+                {"region": r[0], "count": r[1]}
                 for r in cur.fetchall()
             ]
 
@@ -131,7 +130,7 @@ def get_stats() -> dict:
                 },
                 "jobs_per_day": jobs_per_day,
                 "top_companies": top_companies,
-                "jobs_by_location": jobs_by_location,
+                "jobs_by_region": jobs_by_region,
                 "top_skills": top_skills,
                 "by_seniority": by_seniority,
                 "skills_by_role": skills_by_role,

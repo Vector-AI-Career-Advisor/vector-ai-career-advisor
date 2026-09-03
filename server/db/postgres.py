@@ -285,6 +285,10 @@ def init_db(conn=None) -> None:
             # Degree requirements / preferences pulled from the description by the
             # LLM extractor — e.g. {"BSc in Computer Science", "MSc — advantage"}.
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS education TEXT[];")
+            # Minimum degree level derived from `education` by
+            # server/etl/education.py — none | bachelor | master | phd. Feeds the
+            # sidebar's Education filter.
+            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS education_level TEXT;")
             # Per-job logo URLs were replaced by per-company stored images
             # (company_logos table + config.LOGO_DIR). The scraped source URL now
             # lives in company_logos.source_url.
@@ -297,6 +301,7 @@ def init_db(conn=None) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_seniority_idx ON jobs (seniority);")
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_company_slug_idx ON jobs (company_slug);")
             cur.execute("CREATE INDEX IF NOT EXISTS jobs_region_idx ON jobs (region);")
+            cur.execute("CREATE INDEX IF NOT EXISTS jobs_education_level_idx ON jobs (education_level);")
 
             # ── Company logos ────────────────────────────────────────────────
             # One row per company (keyed by utils.company_slug). The image file
@@ -434,6 +439,7 @@ def insert_jobs(conn, jobs: List[dict]) -> int:
             _to_date(j.get("posted_at")),
             j.get("company_slug"), j.get("region"),
             j.get("education", []),
+            j.get("education_level"),
         )
         for j in jobs
     ]
@@ -444,14 +450,15 @@ def insert_jobs(conn, jobs: List[dict]) -> int:
                 id, title, role, seniority, company, location, url,
                 description, skills_must, skills_nice, yearsexperience,
                 past_experience, keyword, source, posted_at, company_slug, region,
-                education
+                education, education_level
             )
             VALUES %s
             ON CONFLICT (id) DO UPDATE SET
-                company_slug = COALESCE(jobs.company_slug, EXCLUDED.company_slug),
+                company_slug   = COALESCE(jobs.company_slug, EXCLUDED.company_slug),
                 -- backfill only: fill `education` on a re-scrape when the row
                 -- predates the field, without disturbing the original extraction
-                education    = COALESCE(jobs.education, EXCLUDED.education);
+                education       = COALESCE(jobs.education, EXCLUDED.education),
+                education_level = COALESCE(jobs.education_level, EXCLUDED.education_level);
         """, rows)
     conn.commit()
     log.info("Inserted %d jobs into PostgreSQL.", len(rows))
@@ -810,7 +817,7 @@ def fetch_jobs_by_ids(conn, ids: List[str]) -> List[dict]:
             SELECT id, title, role, seniority, company, location, url,
                    description, skills_must, skills_nice, yearsexperience,
                    past_experience, keyword, source, posted_at, company_slug, region,
-                   education
+                   education, education_level
             FROM jobs
             WHERE id = ANY(%s);
         """, (ids,))
@@ -859,14 +866,40 @@ def fetch_jobs_missing_education(conn) -> List[dict]:
 
 
 def update_job_education(conn, updates: List[tuple]) -> int:
-    """Bulk-set jobs.education from a list of (job_id, education_list) tuples.
+    """Bulk-set jobs.education from a list of (job_id, education_list) tuples,
+    re-deriving jobs.education_level in the same statement so the two never
+    drift. Does not commit — the caller controls the transaction."""
+    if not updates:
+        return 0
+    from server.etl.education import normalize_education_level  # local: keep server.db free of an etl import at module load
+    with conn.cursor() as cur:
+        cur.executemany(
+            "UPDATE jobs SET education = %s, education_level = %s WHERE id = %s;",
+            [(edu, normalize_education_level(edu), job_id) for job_id, edu in updates],
+        )
+    return len(updates)
+
+
+def fetch_all_job_education(conn) -> List[dict]:
+    """Return [{id, education, education_level}] for every job — used by the
+    education-level normalisation backfill (scripts/backfill_education_level.py)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, education, education_level FROM jobs;")
+        return [
+            {"id": r[0], "education": r[1], "education_level": r[2]}
+            for r in cur.fetchall()
+        ]
+
+
+def update_job_education_level(conn, updates: List[tuple]) -> int:
+    """Bulk-set jobs.education_level from a list of (job_id, level) tuples.
     Does not commit — the caller controls the transaction."""
     if not updates:
         return 0
     with conn.cursor() as cur:
         cur.executemany(
-            "UPDATE jobs SET education = %s WHERE id = %s;",
-            [(edu, job_id) for job_id, edu in updates],
+            "UPDATE jobs SET education_level = %s WHERE id = %s;",
+            [(level, job_id) for job_id, level in updates],
         )
     return len(updates)
 

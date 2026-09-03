@@ -50,8 +50,25 @@ export default function JobCard({ job, onClick }: Props) {
         <h3 className="job-title">{job.title ?? 'Untitled Role'}</h3>
 
         <div className="job-meta-line">
-          {job.seniority && (
-            <span className="job-meta-item">{job.seniority}</span>
+          {posted && (
+            <span className="job-meta-item job-posted">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 7v5l3 2"/>
+              </svg>
+              {posted}
+            </span>
+          )}
+          {job.yearsexperience != null && (
+            <span className="job-meta-item">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2"/>
+                <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+              {job.yearsexperience}yr exp
+            </span>
           )}
           {place && (
             <span className="job-meta-item">
@@ -61,19 +78,6 @@ export default function JobCard({ job, onClick }: Props) {
                 <circle cx="12" cy="9" r="2.5"/>
               </svg>
               {place}
-            </span>
-          )}
-          {job.yearsexperience != null && (
-            <span className="job-meta-item">{job.yearsexperience}yr exp</span>
-          )}
-          {posted && (
-            <span className="job-meta-item job-posted">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M12 7v5l3 2"/>
-              </svg>
-              {posted}
             </span>
           )}
         </div>
