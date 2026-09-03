@@ -211,12 +211,7 @@ function JobMiniCard({ jobId, onOpen }: { jobId: string; onOpen?: (job: Job) => 
 
 // ─── Suggested prompts ───────────────────────────────────────────────────────
 
-const SUGGESTIONS = [
-  'What skills do I need for this role?',
-  'How should I tailor my CV?',
-  'What salary should I expect?',
-  'Find me similar jobs',
-]
+const FIT_JOBS_PROMPT = 'Find me jobs that fit me'
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -242,12 +237,20 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
   const inputRef   = useRef<HTMLTextAreaElement>(null)
   const resumeMenuRef = useRef<HTMLDivElement>(null)
 
-  // Fire a one-shot job recommendation right after a fresh login
-  useEffect(() => {
-    if (!sessionStorage.getItem('vector_just_logged_in')) return
-    sessionStorage.removeItem('vector_just_logged_in')
-
+  // Run the same job recommendation that fires right after a fresh login.
+  // `withPrompt` also drops a user bubble so it reads as a chat turn when
+  // triggered from the suggestion chip.
+  const runLoginRecommendation = (withPrompt = false) => {
+    if (isTyping) return
+    setHasUserInteracted(true)
+    if (withPrompt) {
+      setMessages(prev => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'user', text: FIT_JOBS_PROMPT, timestamp: new Date() },
+      ])
+    }
     setIsTyping(true)
+    setError(null)
     getLoginRecommendation()
       .then(({ reply, job_ids }) => {
         setMessages(prev => [
@@ -255,8 +258,18 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
           { id: crypto.randomUUID(), role: 'agent', text: reply, timestamp: new Date(), jobIds: job_ids, animate: true },
         ])
       })
-      .catch(() => {})
+      .catch(() => {
+        if (withPrompt) setError('Failed to reach the agents. Please try again.')
+      })
       .finally(() => setIsTyping(false))
+  }
+
+  // Fire a one-shot job recommendation right after a fresh login
+  useEffect(() => {
+    if (!sessionStorage.getItem('vector_just_logged_in')) return
+    sessionStorage.removeItem('vector_just_logged_in')
+    runLoginRecommendation()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Scroll to latest message
@@ -525,15 +538,17 @@ export default function AgentChat({ selectedJob, jobs = [], onSelectJob }: Props
             </div>
             <p className="agent-empty-title">Your career agent</p>
             <p className="agent-empty-sub">
-              Ask about any job, get CV tips, salary ranges, or let the agent
+              Ask about any job, get CV tips, career advice, or let the agent
               find the best match for your profile.
             </p>
             <div className="agent-suggestions">
-              {SUGGESTIONS.map(s => (
-                <button key={s} className="suggestion-chip" onClick={() => send(s)}>
-                  {s}
-                </button>
-              ))}
+              <button
+                className="suggestion-chip"
+                onClick={() => runLoginRecommendation(true)}
+                disabled={isTyping}
+              >
+                {FIT_JOBS_PROMPT}
+              </button>
             </div>
           </div>
         )}
